@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# 论文 PDF 体积过大（共约 150MB），不纳入版本控制。
+# 用 scripts/download_papers.py 可一键重新下载；研读笔记 NOTES.md 已入库。
+papers/lecture-*/**/*.pdf
+papers/**/*.pdf
+
+# 论文临时文本提取
+papers/lecture-*/**/*.txt
+
+# 本地执行产物
+*.log
