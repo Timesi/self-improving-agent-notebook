@@ -1,0 +1,283 @@
+const n=`{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "# 多步推理与规划\\n",
+   "id": "80ee44e4"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "> 前面几讲分别缓解了单步推理的局限：第 2 讲用重复采样把计算花在推理时，第 3 讲用验证器给一条解打分，第 4 讲让模型与环境交替、拿到工具反馈。但这些方案都在同一条路径上推进——如果这一步选错了，后面无法回头。\\n>\\n> 这一节把多步任务当作规划问题处理：该拆成几步、该保留几条候选、哪些步骤能并行、每一步该加宽还是加深。我们用 ADaPT、LATS、SPRINT、Wider or Deeper 四篇论文的思路分别回答，并用 numpy 从零实现它们的核心循环。\\n",
+   "id": "8bf6dde8"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "规划要回答的问题是\\"下一步走哪条路\\"。单个 LLM 调用能完成一步动作，但一个任务通常需要若干步，中间步可能出错、可能互相独立、也可能存在多条可行路径。把\\"按什么顺序做哪些动作\\"这件事定下来，就是规划。\\n\\n一个具体的例子：完成\\"制作一把木剑\\"需要先得到木板与铁锭。如果模型直接输出\\"制作木剑\\"，环境不知道该执行什么；如果先把任务规划成\\"得到木板、得到铁锭、合成木剑\\"三个子任务，再逐步执行，任务就变得可完成。多步任务真正的难点在计划之外：某个子任务可能做不下去，多条候选路径可能都要试，有些步骤其实互不依赖。\\n\\n这一节围绕三个问题展开：任务该怎么拆（分解）、多条候选路径该怎么走（搜索）、独立的步骤能不能一起做（并行），最后回到一个更根本的选择——每一步该\\"再想一条路\\"（加宽）还是\\"沿一条路想深一点\\"（加深）。先从单步推理的局限说起。\\n",
+   "id": "e5bdef59"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 1. 单步推理的局限\\n\\n最朴素的做法有两种：让模型一次输出完整答案（整体生成），或者一步步往前走（贪心解码）。整体生成在长任务上不可靠，中间任何一步错了，结尾就会跟着错。贪心解码每一步只保留当前最好的选择，一旦选错就回不到更早的状态。\\n\\n用一个数字运算链来说明。从 1 出发，依次做三次运算，目标值是 40。正确步骤是 ×4、+6、×4。如果模型在第 2 步输出 +2，这条路径的终值就变成 24；之后继续做正确步骤，也无法把 24 拉回 40——错值已经参与了后续计算，而单条路径没有保存其他可能。\\n",
+   "id": "892f2929"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 一条单步贪心路径：从 1 出发依次做 3 个运算，目标值 40。\\n# 正确步骤是 [×4, +6, ×4]，第 2 步会被替换成 +2。\\ntrue_steps = [(\\"×\\", 4), (\\"+\\", 6), (\\"×\\", 4)]\\nbad_steps = [(\\"×\\", 4), (\\"+\\", 2), (\\"×\\", 4)]\\n\\ndef run_chain(steps):\\n    \\"\\"\\"按给定运算链从 1 出发，返回终值。\\"\\"\\"\\n    value = 1\\n    for op, x in steps:\\n        value = value * x if op == \\"×\\" else value + x\\n    return value\\n\\nprint(\\"贪心单路径（第 2 步换成 +2）的终值:\\", run_chain(bad_steps))\\nprint(\\"目标值:\\", 40)\\n\\n# 维护多条候选：每一步同时保留两条走法，错误分支不会挤掉正确分支\\nfrontier = [[1]]\\nfor i in range(3):\\n    nxt = []\\n    for path in frontier:\\n        for steps in (true_steps, bad_steps):\\n            op, x = steps[i]\\n            cur = path[-1]\\n            nxt.append(path + [cur * x if op == \\"×\\" else cur + x])\\n    frontier = nxt\\n\\nvalues = sorted(p[-1] for p in frontier)\\nprint(\\"保留两条候选后，各路径终值:\\", values)\\nprint(\\"到达 40 的路径数:\\", sum(1 for v in values if v == 40))\\n",
+   "id": "57e7cfa1"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 2. 任务分解：按需分解（ADaPT）\\n\\n分解是把大任务切成小任务。最直接的做法是先列完整计划再执行（plan-and-execute）：一开始就把任务拆到最小步骤，然后按顺序执行。它的毛病在于无法预知哪个子任务难、哪个简单——对能一步完成的子任务也强行拆细，反而引入多余动作和错误假设。\\n\\nADaPT 换了一个顺序：先让执行器（executor）直接尝试整个任务；执行器自己报告失败时，才让规划器（planner）把任务拆成若干子任务，再对每个子任务递归调用同一套流程。拆的深度由任务的真实难度决定，而不是预先写死。执行器把\\"我完成了\\"或\\"我失败了\\"作为输出，这个自报结果充当任务的成功信号。\\n\\n两个角色分开：planner 负责把任务拆成子任务，executor 负责实际执行，递归控制由一个固定程序 controller 完成。子任务之间有两种组合方式：AND 表示必须全部成功，OR 表示任一成功即可。\\n",
+   "id": "3bfb4496"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "### executor 与 planner：一个配方合成环境\\n\\n用一个小型配方环境演示三种策略的差异。每种物品有一个配方（需要的子物品），原子物品不需要任何子物品。executor 能直接完成原子物品和一步可做的物品（配方里的子物品全部是原子的）；需要更深组合的物品，executor 会失败。这样一个\\"executor 能力有限\\"的环境，能逼出按需分解的必要性。\\n",
+   "id": "a5001e56"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 合成配方环境：物品 → 需要的子物品（空列表表示原子物品）\\nRECIPES = {\\n    \\"木棍\\": [],\\n    \\"铁锭\\": [],\\n    \\"木板\\": [\\"木棍\\"],\\n    \\"木剑\\": [\\"木板\\", \\"铁锭\\"],\\n    \\"武器箱\\": [\\"木剑\\", \\"铁锭\\"],\\n}\\n\\ndef is_atomic(item):\\n    \\"\\"\\"物品是否原子：不需要任何子物品。\\"\\"\\"\\n    return len(RECIPES[item]) == 0\\n\\ndef is_direct(item):\\n    \\"\\"\\"物品是否一步可做：配方里的子物品全部原子。\\"\\"\\"\\n    return all(is_atomic(sub) for sub in RECIPES[item])\\n\\ndef executor_ability(item):\\n    \\"\\"\\"executor 的完成度判定：原子或一步可做的物品能直接完成，否则失败。\\"\\"\\"\\n    if is_atomic(item) or is_direct(item):\\n        return \\"completed\\"\\n    return \\"failed\\"\\n\\nfor item in RECIPES:\\n    print(f\\"{item}: 配方={RECIPES[item]}, executor={executor_ability(item)}\\")\\n",
+   "id": "57abb784"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 定位仓库根目录的 llm_client.py，统一创建客户端\\nimport sys, os\\n_root = os.path.abspath(os.getcwd())\\nwhile not os.path.exists(os.path.join(_root, 'llm_client.py')):\\n    _root = os.path.dirname(_root)\\n    if _root == os.path.dirname(_root):\\n        break\\nif _root not in sys.path:\\n    sys.path.insert(0, _root)\\nfrom llm_client import get_llm\\n\\nclient = get_llm()\\nprint(\\"当前客户端是否为 mock 模式:\\", client.is_mock)\\n\\ndef planner(client, item):\\n    \\"\\"\\"规划器：把任务拆成若干子任务，返回 (子任务列表, 组合逻辑)。\\n    真实模式询问 LLM 并宽容解析；mock 模式返回配方作为脚本化计划。\\"\\"\\"\\n    if not client.is_mock:\\n        prompt = f\\"把「制作 {item}」拆成若干子任务，用 AND 连接，输出形如 A AND B 的计划。\\"\\n        reply = client.chat([{\\"role\\": \\"user\\", \\"content\\": prompt}])\\n        subs = [s.strip() for s in reply.replace(\\"AND\\", \\" and \\").split(\\" and \\")]\\n        subs = [s for s in subs if s in RECIPES]\\n        if subs:\\n            return subs, \\"AND\\"\\n    return list(RECIPES[item]), \\"AND\\"\\n\\ndef executor(client, item, depth):\\n    \\"\\"\\"执行器：返回 (完成度, 自评文本)。\\n    完成度用环境的确定性规则判定，自评文本来自 LLM（mock 为脚本化占位）。\\"\\"\\"\\n    outcome = executor_ability(item)\\n    if client.is_mock:\\n        report = f\\"mock 占位：执行「{item}」→ {outcome}\\"\\n    else:\\n        msg = f\\"请执行「制作 {item}」并自评，完成输出 completed，失败输出 failed。\\"\\n        report = client.chat([{\\"role\\": \\"user\\", \\"content\\": msg}])\\n    return outcome, report\\n\\nprint(\\"planner 输出:\\", planner(client, \\"木剑\\"))\\nprint(\\"executor 输出:\\", executor(client, \\"木剑\\", 0))\\n",
+   "id": "5a2b59c2"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# ADaPT 递归控制器：先试 executor，失败才让 planner 拆，拆完递归\\ndef adapt_controller(client, item, depth, dmax, trace, path):\\n    \\"\\"\\"ADaPT(Task, depth)：depth 超过 dmax 只跑 executor。\\n    trace 记录调用树，(path, item, action, detail)，path 是祖先序列。\\"\\"\\"\\n    outcome, _ = executor(client, item, depth)\\n    trace.append((path, item, \\"executor\\", outcome))\\n    if outcome == \\"completed\\":\\n        return True\\n    if depth >= dmax:\\n        return False\\n    subs, logic = planner(client, item)\\n    trace.append((path, item, \\"split\\", list(subs)))\\n    results = [adapt_controller(client, s, depth + 1, dmax, trace, path + (item,))\\n               for s in subs]\\n    return all(results) if logic == \\"AND\\" else any(results)\\n\\ndef run_react(client, item):\\n    \\"\\"\\"ReAct 基线：只跑一次 executor，不做任何分解。\\"\\"\\"\\n    trace = []\\n    outcome, _ = executor(client, item, 0)\\n    trace.append(((), item, \\"executor\\", outcome))\\n    return trace, outcome == \\"completed\\"\\n\\ndef run_plan_execute(client, item):\\n    \\"\\"\\"Plan-and-Execute 基线：一次性拆到原子物品，再逐个执行。\\"\\"\\"\\n    trace = []\\n    def plan_all(it, path):\\n        if is_atomic(it):\\n            outcome, _ = executor(client, it, len(path))\\n            trace.append((path, it, \\"executor\\", outcome))\\n            return\\n        trace.append((path, it, \\"split\\", list(RECIPES[it])))\\n        for sub in RECIPES[it]:\\n            plan_all(sub, path + (it,))\\n    plan_all(item, ())\\n    return trace, True\\n",
+   "id": "19804d3c"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "dmax = 3\\nitem = \\"武器箱\\"\\n\\nreact_trace, react_ok = run_react(client, item)\\nplan_trace, plan_ok = run_plan_execute(client, item)\\nadapt_trace = []\\nadapt_ok = adapt_controller(client, item, 0, dmax, adapt_trace, ())\\n\\ndef show_trace(trace):\\n    \\"\\"\\"把调用树打印成文本。\\"\\"\\"\\n    lines = []\\n    for path, it, action, detail in trace:\\n        indent = \\"  \\" * len(path)\\n        if action == \\"split\\":\\n            lines.append(f\\"{indent}{it}: 拆成 {detail}\\")\\n        else:\\n            lines.append(f\\"{indent}{it}: {detail}\\")\\n    return \\"\\\\n\\".join(lines)\\n\\nprint(\\"=== ReAct（不分解）===\\")\\nprint(show_trace(react_trace))\\nprint(\\"整体成功:\\", react_ok)\\nprint()\\n\\nprint(\\"=== Plan-and-Execute（一次性全拆）===\\")\\nprint(show_trace(plan_trace))\\nprint(\\"整体成功:\\", plan_ok)\\nprint()\\n\\nprint(\\"=== ADaPT（失败才拆）===\\")\\nprint(show_trace(adapt_trace))\\nprint(\\"整体成功:\\", adapt_ok)\\n\\ndef count_actions(trace):\\n    \\"\\"\\"统计 executor 与 split 的出现次数。\\"\\"\\"\\n    n_exec = sum(1 for _, _, a, _ in trace if a == \\"executor\\")\\n    n_split = sum(1 for _, _, a, _ in trace if a == \\"split\\")\\n    return n_exec, n_split\\n\\nfor name, trace in [(\\"ReAct\\", react_trace), (\\"Plan-and-Execute\\", plan_trace),\\n                    (\\"ADaPT\\", adapt_trace)]:\\n    ne, ns = count_actions(trace)\\n    print(f\\"{name}: executor 调用 {ne} 次, 分解 {ns} 次\\")\\n\\nprint(\\"解读：ADaPT 只在失败处分解（武器箱、木剑），木板由 executor 直接完成；\\"\\n      \\"Plan-and-Execute 把木板也拆成了木棍。少一次分解，多几次失败的 executor 尝试。\\")\\n",
+   "id": "82747ebe"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import matplotlib.pyplot as plt\\n\\n# 物品的英文标签，图上文字统一用英文\\nEN = {\\"木棍\\": \\"stick\\", \\"铁锭\\": \\"iron\\", \\"木板\\": \\"plank\\",\\n      \\"木剑\\": \\"sword\\", \\"武器箱\\": \\"armory\\"}\\n\\ndef build_tree(trace):\\n    \\"\\"\\"把 trace 还原成节点信息与父子关系。\\"\\"\\"\\n    info, children, roots = {}, {}, []\\n    for path, it, action, detail in trace:\\n        nid = tuple(list(path) + [it])\\n        info.setdefault(nid, (it, action, detail))\\n        children.setdefault(nid, [])\\n        if path:\\n            children.setdefault(path, []).append(nid)\\n        else:\\n            roots.append(nid)\\n    return info, children, roots\\n\\ndef layout(nid, children, counter):\\n    \\"\\"\\"自底向上布置坐标：叶子依次编号，内部节点取子节点中点。\\"\\"\\"\\n    if not children.get(nid):\\n        x = counter[0]\\n        counter[0] += 1\\n        return {nid: x}, x, x\\n    result, xmin, xmax = {}, 1e9, -1e9\\n    for c in children.get(nid, []):\\n        sub, lo, hi = layout(c, children, counter)\\n        result.update(sub)\\n        xmin, xmax = min(xmin, lo), max(xmax, hi)\\n    result[nid] = (xmin + xmax) / 2\\n    return result, xmin, xmax\\n\\ndef plot_trace(trace, title, ax):\\n    \\"\\"\\"画调用树：split 节点画方框，executor 节点按完成/失败着色。\\"\\"\\"\\n    info, children, roots = build_tree(trace)\\n    pos, counter = {}, [0]\\n    for root in roots:\\n        sub, _, _ = layout(root, children, counter)\\n        pos.update(sub)\\n    depth = {nid: len(nid) - 1 for nid in info}\\n    for nid in info:\\n        for c in children.get(nid, []):\\n            ax.plot([pos[nid], pos[c]], [-depth[nid], -depth[c]],\\n                    color=\\"#90a4ae\\", lw=1, zorder=1)\\n    for nid, (item, action, detail) in info.items():\\n        x, y = pos[nid], -depth[nid]\\n        en = EN.get(item, item)\\n        if action == \\"executor\\":\\n            color = \\"#4caf50\\" if detail == \\"completed\\" else \\"#ef5350\\"\\n            ax.scatter(x, y, s=2200, c=color, zorder=3)\\n            ax.text(x, y, en, ha=\\"center\\", va=\\"center\\", fontsize=9, zorder=4)\\n        else:\\n            ax.add_patch(plt.Rectangle((x - 0.25, y - 0.18), 0.5, 0.36,\\n                                       fill=False, edgecolor=\\"#455a64\\", lw=1.5))\\n            ax.text(x, y, en, ha=\\"center\\", va=\\"center\\", fontsize=9)\\n    ax.set_xticks([])\\n    ax.set_ylim(-max(depth.values()) - 0.6, 0.5)\\n    ax.set_ylabel(\\"depth\\")\\n    ax.set_title(title)\\n\\nfig, axes = plt.subplots(1, 3, figsize=(15, 4.2))\\nplot_trace(react_trace, \\"ReAct\\", axes[0])\\nplot_trace(plan_trace, \\"Plan-and-Execute\\", axes[1])\\nplot_trace(adapt_trace, \\"ADaPT\\", axes[2])\\nplt.tight_layout()\\nplt.show()\\n",
+   "id": "e40f3813"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 3. 树搜索：同时保留多条路径（LATS）\\n\\n分解把任务在垂直方向切细，降低每一步的难度；树搜索在水平方向展开——同一个状态保留多个候选动作，走错一条还能回到其他分支。蒙特卡洛树搜索（MCTS）把搜索组织成一棵树：节点是状态，边是一个候选动作，根是初始状态，叶子是尚未展开的状态。\\n\\nLATS 让同一个 LLM 扮演三个角色：Agent 采样候选动作，价值函数评估状态，反思器从失败中总结教训。它成立的前提是 LLM 任务可回退——想回到任何历史状态，把此前的文本重新作为输入即可，不需要模拟世界。这一节先手算两个核心公式（UCT 选择与价值回溯），再在 24 点环境上跑一个简化 LATS。\\n",
+   "id": "ee19dc8b"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "### 从 UCT 到价值回溯\\n\\n选择阶段用 UCT 公式在子节点中挑一个：\\n\\n$$ UCT(s) = V(s) + w\\\\sqrt{\\\\frac{\\\\ln N(p)}{N(s)}} $$\\n\\nV(s) 是子节点的价值，N(s) 是子节点访问次数，N(p) 是父节点访问次数，w 控制探索强度。第一项偏向访问过的、价值高的节点（利用），第二项偏向访问次数少的节点（探索）：N(s) 小的时候 $\\\\ln N(p)/N(s)$ 大，未充分探索的子节点会被优先尝试。对数是放在分子里的，因为父节点访问次数增长时，探索的需求只缓慢增加。\\n\\n用一棵手工构造的小树验证。根节点访问 24 次，四个子节点各有价值和访问次数：\\n\\n| 子节点 | V(s) | N(s) |\\n|:---|:---|:---|\\n| s1 | 0.30 | 10 |\\n| s2 | 0.50 | 5 |\\n| s3 | 0.10 | 8 |\\n| s4 | 0.00 | 1 |\\n\\nw=1 时，s4 的探索项约为 1.78，虽然价值为 0，总分仍然最高，会被优先展开。下面改变 w 观察选择如何切换。\\n",
+   "id": "13d7f918"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import numpy as np\\n\\nchildren = {\\"s1\\": (0.30, 10), \\"s2\\": (0.50, 5), \\"s3\\": (0.10, 8), \\"s4\\": (0.00, 1)}\\nN_parent = 24.0\\n\\ndef uct(v, n, w):\\n    \\"\\"\\"UCT 分数：价值 + 探索项。\\"\\"\\"\\n    return v + w * np.sqrt(np.log(N_parent) / n)\\n\\nfor w in [0.1, 1.0, 3.0]:\\n    scores = {k: uct(*val, w) for k, val in children.items()}\\n    best = max(scores, key=scores.get)\\n    fmt = \\"  \\".join(f\\"{k}={s:.3f}\\" for k, s in scores.items())\\n    print(f\\"w={w}: {fmt}  -> 选 {best}\\")\\n",
+   "id": "46ab22d1"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 价值回溯：一条 根→A→叶 的路径，终点奖励 r=1\\npath = [(\\"root\\", 10, 0.35), (\\"A\\", 4, 0.40), (\\"leaf\\", 2, 0.50)]\\nr = 1.0\\n\\nupdated = []\\nfor name, n_old, v_old in path:\\n    n_new = n_old + 1\\n    v_new = (v_old * n_old + r) / n_new\\n    updated.append((name, n_new, v_new))\\n\\nprint(\\"增量均值更新（r=1）：\\")\\nfor name, n, v in updated:\\n    print(f\\"  {name}: N={n}, V={v:.4f}\\")\\nprint(\\"叶节点奖励回传到根，值越高、越常被走的节点价值越接近 1。\\")\\n",
+   "id": "de0cd6dd"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "### 简化 LATS：节点、展开、回传\\n\\n把两个公式装进一个完整的简化 LATS。环境用 24 点：给定四个数字，每次用其中两个做一次四则运算，把结果放回，直到只剩一个数，等于 24 得奖励 1。候选动作由 LLM 提出（mock 模式下用确定性脚本生成），最终判定来自环境规则——搜索的节点维护、选择与回溯全由我们自己实现。\\n\\n六个操作精简成四步循环：选择（UCT）→ 展开（生成候选子节点）→ 评估（环境规则打分）→ 回溯（增量均值更新）。失败时额外记一条反思文本，作为下一次展开的语义记忆。先实现环境与候选生成。\\n",
+   "id": "b1a05b25"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import re\\n\\nclass State:\\n    \\"\\"\\"搜索状态：若干数字组成的元组。\\"\\"\\"\\n    __slots__ = (\\"nums\\",)\\n\\n    def __init__(self, nums):\\n        self.nums = tuple(nums)\\n\\n    def __hash__(self):\\n        return hash(self.nums)\\n\\n    def __eq__(self, other):\\n        return self.nums == other.nums\\n\\n    def __repr__(self):\\n        return str(list(self.nums))\\n\\nTARGET = 24.0\\n\\ndef evaluate(state):\\n    \\"\\"\\"环境打分：只剩一个数且等于 24 得 1 分，否则 0 分。\\"\\"\\"\\n    if len(state.nums) == 1:\\n        return 1.0 if abs(state.nums[0] - TARGET) < 1e-6 else 0.0\\n    return 0.0\\n\\ndef apply_expr(state, expr):\\n    \\"\\"\\"把形如 '8 + 3' 的算式应用到状态：替换两个操作数为结果。\\n    算式不可用时返回 None。\\"\\"\\"\\n    m = re.match(r\\"(-?\\\\d+(?:\\\\.\\\\d+)?)\\\\s*([+\\\\-*/])\\\\s*(\\\\d+(?:\\\\.\\\\d+)?)$\\",\\n                 expr.strip())\\n    if not m:\\n        return None\\n    a, op, b = float(m.group(1)), m.group(2), float(m.group(3))\\n    nums = list(state.nums)\\n    if a not in nums or b not in nums:\\n        return None\\n    ia = nums.index(a)\\n    nums_c = nums[:]\\n    nums_c[ia] = None\\n    try:\\n        ib = nums_c.index(b)\\n    except ValueError:\\n        return None\\n    if op == \\"+\\":\\n        r = a + b\\n    elif op == \\"-\\":\\n        r = a - b\\n    elif op == \\"*\\":\\n        r = a * b\\n    else:\\n        if abs(b) < 1e-12:\\n            return None\\n        r = a / b\\n    keep = [nums[i] for i in range(len(nums)) if i not in (ia, ib)]\\n    return State(keep + [r])\\n\\ndef scripted_exprs(state, max_k):\\n    \\"\\"\\"mock 占位：按结果与 24 的接近程度取前 max_k 个可行算式。\\"\\"\\"\\n    cands = []\\n    nums = list(state.nums)\\n    for i in range(len(nums)):\\n        for j in range(len(nums)):\\n            if i == j:\\n                continue\\n            for op in [\\"+\\", \\"-\\", \\"*\\", \\"/\\"]:\\n                if op == \\"/\\" and abs(nums[j]) < 1e-12:\\n                    continue\\n                expr = f\\"{nums[i]} {op} {nums[j]}\\"\\n                ns = apply_expr(state, expr)\\n                if ns is not None:\\n                    cands.append((abs(ns.nums[-1] - TARGET), expr))\\n    cands.sort(key=lambda t: t[0])\\n    return [e for _, e in cands[:max_k]]\\n\\ndef propose_candidates(client, state, max_k=4):\\n    \\"\\"\\"为状态提出候选动作，返回 [(表达式, 新状态)]。\\n    真实模式用 LLM 生成并宽容解析，mock 模式走确定性脚本。\\"\\"\\"\\n    if client.is_mock:\\n        exprs = scripted_exprs(state, max_k)\\n    else:\\n        prompt = f\\"当前数字是 {list(state.nums)}，请用其中两个数字和四则运算符写算式。\\"\\n        reply = client.chat([{\\"role\\": \\"user\\", \\"content\\": prompt}])\\n        exprs = re.findall(r\\"-?\\\\d+(?:\\\\.\\\\d+)?\\\\s*[+\\\\-*/]\\\\s*\\\\d+(?:\\\\.\\\\d+)?\\", reply)\\n        if not exprs:\\n            exprs = scripted_exprs(state, max_k)\\n    out = []\\n    for e in exprs:\\n        ns = apply_expr(state, e)\\n        if ns is not None:\\n            out.append((e, ns))\\n    return out\\n\\nprint(\\"初始状态:\\", State([1, 2, 3, 4]))\\nprint(\\"候选动作:\\", [e for e, _ in propose_candidates(client, State([1, 2, 3, 4]))])\\nprint(\\"评估 [24]:\\", evaluate(State([24.0])))\\n",
+   "id": "4be3d04a"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "class Node:\\n    \\"\\"\\"搜索树节点：状态 + 访问次数 + 价值 + 子节点。\\"\\"\\"\\n\\n    def __init__(self, state, parent=None):\\n        self.state = state\\n        self.parent = parent\\n        self.children = []\\n        self.visits = 0\\n        self.value = 0.0\\n\\ndef uct_score(node, parent_visits, w):\\n    \\"\\"\\"UCT 选择分数：价值 + 探索项。未访问的子节点优先被尝试。\\"\\"\\"\\n    if node.visits == 0:\\n        return float(\\"inf\\")\\n    return node.value + w * np.sqrt(np.log(parent_visits) / node.visits)\\n\\ndef select(root, w):\\n    \\"\\"\\"从根出发，沿 UCT 分数最大的子节点下降到叶。\\"\\"\\"\\n    node = root\\n    while node.children:\\n        node = max(node.children, key=lambda c: uct_score(c, node.visits, w))\\n    return node\\n\\ndef expand(node, client, max_k):\\n    \\"\\"\\"展开：为当前状态生成候选子节点。\\"\\"\\"\\n    for expr, ns in propose_candidates(client, node.state, max_k):\\n        node.children.append(Node(ns, parent=node))\\n\\ndef backprop(node, reward):\\n    \\"\\"\\"回溯：沿叶到根更新访问次数与价值（增量均值）。\\"\\"\\"\\n    while node is not None:\\n        node.visits += 1\\n        node.value = (node.value * (node.visits - 1) + reward) / node.visits\\n        node = node.parent\\n\\ndef lat_search(client, start_state, iterations, w=1.0, max_k=4,\\n               reflections=None):\\n    \\"\\"\\"简化 LATS：选择 → 展开 → 评估 → 回溯。\\n    返回 (root, 每轮选中状态, 每轮奖励, 成功终点或 None)。\\"\\"\\"\\n    root = Node(start_state)\\n    chosen, rewards, found = [], [], None\\n    for it in range(iterations):\\n        leaf = select(root, w)\\n        chosen.append(leaf.state)\\n        reward = evaluate(leaf.state)\\n        rewards.append(reward)\\n        if reward > 0.5 and found is None:\\n            found = leaf\\n        if reward < 0.5 and len(leaf.state.nums) == 1 and reflections is not None:\\n            reflections.append(f\\"第 {it + 1} 轮反思：终值 {leaf.state.nums[0]:.4f} \\"\\n                               f\\"不等于 24，需要换一种运算组合。\\")\\n        expand(leaf, client, max_k)\\n        backprop(leaf, reward)\\n    return root, chosen, rewards, found\\n\\ndef count_nodes(root):\\n    \\"\\"\\"统计搜索树的节点总数。\\"\\"\\"\\n    total = 0\\n    stack = [root]\\n    while stack:\\n        n = stack.pop()\\n        total += 1\\n        stack.extend(n.children)\\n    return total\\n",
+   "id": "6ba132e7"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "def collect_layout(root):\\n    \\"\\"\\"分层布局辅助：返回 (节点列表, id 到父节点的映射)。\\"\\"\\"\\n    nodes = []\\n    stack = [root]\\n    while stack:\\n        n = stack.pop()\\n        nodes.append(n)\\n        stack.extend(n.children)\\n    parent = {id(c): n for n in nodes for c in n.children}\\n    return nodes, parent\\n\\ndef depth_of(n, parent):\\n    \\"\\"\\"沿父链计算节点深度。\\"\\"\\"\\n    d = 0\\n    while id(n) in parent:\\n        n = parent[id(n)]\\n        d += 1\\n    return d\\n\\nnp.random.seed(42)\\nreflections = []\\nroot, chosen, rewards, found = lat_search(\\n    client, State([1, 2, 3, 4]), iterations=40, w=1.0, max_k=4,\\n    reflections=reflections)\\n\\nprint(\\"搜索树节点数:\\", count_nodes(root))\\nprint(\\"前 8 轮选中的状态:\\")\\nfor i, s in enumerate(chosen[:8]):\\n    print(f\\"  第 {i + 1} 轮: {s}\\")\\n\\nsuccess_iters = [i + 1 for i, r in enumerate(rewards) if r > 0.5]\\nprint(\\"得到奖励 1 的轮次:\\", success_iters)\\n\\nif found is not None:\\n    path = []\\n    node = found\\n    while node is not None:\\n        path.append(node.state)\\n        node = node.parent\\n    print(\\"从根到解的路径:\\", [str(s) for s in reversed(path)])\\n\\nprint(\\"失败反思条数:\\", len(reflections))\\nif reflections:\\n    print(\\"最后一条反思:\\", reflections[-1])\\n\\nprint(\\"解法路径上的访问次数与价值:\\")\\nif found is not None:\\n    node = found\\n    while node is not None:\\n        print(f\\"  {node.state}: N={node.visits}, V={node.value:.3f}\\")\\n        node = node.parent\\n",
+   "id": "98de91f0"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import matplotlib.pyplot as plt\\n\\ndef plot_search_tree(root, found, title):\\n    \\"\\"\\"画搜索树：节点按价值着色，解法路径画红圈。\\"\\"\\"\\n    nodes, parent = collect_layout(root)\\n    pos, counter = {}, [0]\\n    def assign(n):\\n        if not n.children:\\n            x = counter[0]\\n            counter[0] += 1\\n            return {id(n): x}, x, x\\n        res, xmin, xmax = {}, 1e9, -1e9\\n        for c in n.children:\\n            sub, lo, hi = assign(c)\\n            res.update(sub)\\n            xmin, xmax = min(xmin, lo), max(xmax, hi)\\n        res[id(n)] = (xmin + xmax) / 2\\n        return res, xmin, xmax\\n    pos, _, _ = assign(root)\\n\\n    fig, ax = plt.subplots(figsize=(12, 5))\\n    for n in nodes:\\n        for c in n.children:\\n            ax.plot([pos[id(n)], pos[id(c)]],\\n                    [-depth_of(n, parent), -depth_of(c, parent)],\\n                    color=\\"#b0bec5\\", lw=0.8, zorder=1)\\n    for n in nodes:\\n        x, y = pos[id(n)], -depth_of(n, parent)\\n        ax.scatter(x, y, s=900, c=[plt.cm.RdYlGn(n.value)], zorder=3)\\n        label = \\",\\".join(f\\"{v:g}\\" for v in n.state.nums)\\n        ax.text(x, y, label, ha=\\"center\\", va=\\"center\\", fontsize=7, zorder=4)\\n    node = found\\n    while node is not None:\\n        x, y = pos[id(node)], -depth_of(node, parent)\\n        ax.add_patch(plt.Circle((x, y), 0.3, fill=False, color=\\"#d32f2f\\",\\n                                lw=2, zorder=5))\\n        node = parent.get(id(node))\\n    ax.set_xticks([])\\n    ax.set_ylabel(\\"depth\\")\\n    ax.set_title(title)\\n    plt.tight_layout()\\n    plt.show()\\n\\nplot_search_tree(root, found, \\"LATS search tree (value-colored)\\")\\n",
+   "id": "7332148f"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 4. 并行规划与执行（SPRINT）\\n\\n前三节关注怎么把任务做对：分解降低难度，搜索保留多条路径。这一节关注怎么做得快。长推理模型输出的轨迹里，很多步骤彼此独立——反思、拆解、试错、独立的子计算——顺序执行是一种浪费。\\n\\nSPRINT 把规划与执行交错进行：规划器（planner）生成一批互相独立的子任务，执行器（executor）并行执行后同步回主上下文，形成\\"计划 → 执行 → 同步 → 再计划\\"的滚动循环。训练时先把原始顺序轨迹重排成结构化数据：拆成步骤、判依赖、建 DAG、按阶段打包。核心是阶段号公式，它决定哪些步骤能放同一阶段并行。\\n",
+   "id": "a34b6a62"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "### 阶段号：把独立步骤打包\\n\\n给每个步骤标一个阶段号 σ。无父节点的步骤从 1 开始；有父节点的步骤取所有父节点中最大的\\"父阶段号 + 是否执行\\"。公式如下：\\n\\n$$ \\\\sigma(S_i)=\\\\begin{cases}1, & S_i \\\\text{ 无父节点}\\\\\\\\\\n\\\\max_{S_p\\\\in\\\\mathrm{Parents}(S_i)}\\\\big(\\\\sigma(S_p)+\\\\mathbf{1}[E_p\\\\neq\\\\varnothing]\\\\big), & \\\\text{否则}\\\\end{cases} $$\\n\\n只有父节点有执行阶段（$E_p\\\\neq\\\\varnothing$）时，子节点才推迟到下一阶段；纯计划的父节点（如\\"拆成 40 与 7\\"）不产生阶段边界，子节点可以并入同一阶段。用一条 6 步的推理轨迹做数值验证。\\n",
+   "id": "e9d01914"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 一条带依赖的推理轨迹：计划步骤与执行步骤交替\\nsteps = {\\n    \\"S1 读题分析\\":      {\\"has_exec\\": False, \\"deps\\": [], \\"ptok\\": 30, \\"etok\\": 0},\\n    \\"S2 拆成 40 与 7\\":  {\\"has_exec\\": False, \\"deps\\": [\\"S1 读题分析\\"], \\"ptok\\": 25, \\"etok\\": 0},\\n    \\"S3 算 23×40\\":      {\\"has_exec\\": True,  \\"deps\\": [\\"S2 拆成 40 与 7\\"], \\"ptok\\": 10, \\"etok\\": 120},\\n    \\"S4 算 23×7\\":       {\\"has_exec\\": True,  \\"deps\\": [\\"S2 拆成 40 与 7\\"], \\"ptok\\": 10, \\"etok\\": 120},\\n    \\"S5 汇总\\": {\\"has_exec\\": True, \\"deps\\": [\\"S3 算 23×40\\", \\"S4 算 23×7\\"],\\n                \\"ptok\\": 15, \\"etok\\": 80},\\n    \\"S6 用 47×23 验算\\": {\\"has_exec\\": True, \\"deps\\": [\\"S5 汇总\\"], \\"ptok\\": 20, \\"etok\\": 150},\\n}\\n\\ndef stage_numbers(steps, plan_is_boundary=False):\\n    \\"\\"\\"按依赖计算阶段号。\\n    plan_is_boundary=True 时把纯计划步骤也当作阶段边界（不做优化）。\\"\\"\\"\\n    out = {}\\n    def solve(name):\\n        if name in out:\\n            return out[name]\\n        deps = steps[name][\\"deps\\"]\\n        if not deps:\\n            out[name] = 1\\n            return 1\\n        val = 0\\n        for d in deps:\\n            inc = 1 if (steps[d][\\"has_exec\\"] or plan_is_boundary) else 0\\n            val = max(val, solve(d) + inc)\\n        out[name] = val\\n        return val\\n    for name in steps:\\n        solve(name)\\n    return out\\n\\ns_opt = stage_numbers(steps)\\ns_no = stage_numbers(steps, plan_is_boundary=True)\\nfor name in steps:\\n    print(f\\"{name}: 优化后阶段 {s_opt[name]}  |  不做优化 {s_no[name]}\\")\\n",
+   "id": "558f0b85"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import networkx as nx\\nimport matplotlib.pyplot as plt\\n\\ndef total_tokens(name):\\n    \\"\\"\\"一个步骤的总 token 数（计划 + 执行）。\\"\\"\\"\\n    return steps[name][\\"ptok\\"] + steps[name][\\"etok\\"]\\n\\nserial = sum(total_tokens(n) for n in steps)\\nprint(\\"串行顺序 token:\\", serial)\\n\\ngroups = {}\\nfor name, st in s_opt.items():\\n    groups.setdefault(st, []).append(name)\\nseq_tok = sum(max(total_tokens(n) for n in g) for g in groups.values())\\nprint(\\"并行顺序 token:\\", seq_tok)\\nprint(f\\"并行相对串行节省: {1 - seq_tok / serial:.1%}\\")\\nfor st in sorted(groups):\\n    print(f\\"  阶段 {st}: {groups[st]}\\")\\n\\n# DAG 可视化：节点按阶段着色，图上文字用英文\\nEN_STEPS = {\\"S1 读题分析\\": \\"read\\", \\"S2 拆成 40 与 7\\": \\"split\\",\\n            \\"S3 算 23×40\\": \\"calc 23x40\\", \\"S4 算 23×7\\": \\"calc 23x7\\",\\n            \\"S5 汇总\\": \\"sum\\", \\"S6 用 47×23 验算\\": \\"verify\\"}\\n\\ng = nx.DiGraph()\\nfor name in steps:\\n    g.add_node(name)\\n    for d in steps[name][\\"deps\\"]:\\n        g.add_edge(d, name)\\npos = nx.spring_layout(g, seed=7, k=1.4)\\n\\nfig, axes = plt.subplots(1, 2, figsize=(14, 4.5))\\ncolors = [plt.cm.tab10((s_opt[n] - 1) % 10) for n in g.nodes]\\nnx.draw_networkx_edges(g, pos, ax=axes[0], arrows=True, arrowstyle=\\"-|>\\",\\n                       edge_color=\\"#90a4ae\\")\\nnx.draw_networkx_nodes(g, pos, ax=axes[0], node_color=colors, node_size=2400)\\nnx.draw_networkx_labels(g, pos, ax=axes[0], labels=EN_STEPS, font_size=9)\\naxes[0].set_title(\\"DAG colored by stage\\")\\naxes[0].axis(\\"off\\")\\n\\naxes[1].bar([\\"serial\\", \\"parallel\\"], [serial, seq_tok],\\n            color=[\\"#90a4ae\\", \\"#4caf50\\"])\\naxes[1].set_title(\\"Sequential tokens\\")\\naxes[1].set_ylabel(\\"tokens\\")\\nfor i, v in enumerate([serial, seq_tok]):\\n    axes[1].text(i, v + 5, str(v), ha=\\"center\\")\\n\\nplt.tight_layout()\\nplt.show()\\n",
+   "id": "2cde74bf"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 5. 自适应分支：加宽还是加深（Wider or Deeper）\\n\\n前几节都隐含一个超参数：一次展开几个候选，或者搜索多深。标准 MCTS 的分支宽度是固定的，而重复采样只加宽（多生成全新答案）、顺序细化只加深（改进已有答案）。如果任务在两者之间变化，固定策略都会浪费预算。\\n\\nWider or Deeper 回答这个问题：分支不设上限，每个节点动态决定加宽（从当前节点生成全新候选，记作 GEN 动作）还是加深（细化某个已有答案）。选择策略用 Thompson 采样而不是 UCT——UCT 假设候选分支固定不变，而 GEN 会不断生成新分支；Thompson 采样从每个动作的成功率后验里采一个数，新分支天然带着先验参与竞争。\\n",
+   "id": "a1348b8e"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "### Thompson 采样：Beta 后验\\n\\n把每个动作（GEN 与 REFINE）看作成功率未知的臂，用 Beta(α, β) 后验刻画其成功率分布。开始时均匀先验 α=β=1；每次执行后按结果更新：成功 α+1，失败 β+1。选择时从每个臂的后验各采一个成功率，取最大者执行。这样一个\\"探索时随机扰动、利用时偏向表现好的臂\\"的过程，就是 Thompson 采样。\\n\\n下面在两个合成臂上跑这个迷你算法，观察它对成功率更高的 REFINE 的偏好。\\n",
+   "id": "8e7361ef"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import numpy as np\\n\\nclass BetaArm:\\n    \\"\\"\\"一个动作的后验：Beta(alpha, beta)，刻画未知的成功率。\\"\\"\\"\\n\\n    def __init__(self, alpha=1, beta=1):\\n        self.alpha = alpha\\n        self.beta = beta\\n\\n    def sample(self, rng):\\n        \\"\\"\\"从后验采样一个成功率。\\"\\"\\"\\n        return rng.beta(self.alpha, self.beta)\\n\\n    def update(self, success):\\n        \\"\\"\\"按观测结果更新后验参数。\\"\\"\\"\\n        self.alpha += success\\n        self.beta += 1 - success\\n\\ndef mock_scorer(action, p_gen, p_refine, rng):\\n    \\"\\"\\"合成环境：GEN 与 REFINE 各有真实成功概率，返回 0/1。\\"\\"\\"\\n    p = p_gen if action == \\"gen\\" else p_refine\\n    return 1 if rng.random() < p else 0\\n\\ndef thompson_choose(arms, rng):\\n    \\"\\"\\"从每个臂的后验采样，返回成功率最大者的动作名。\\"\\"\\"\\n    return max(arms, key=lambda a: arms[a].sample(rng))\\n\\n# 两个臂：gen 表示生成新答案（加宽），refine 表示细化现有答案（加深）\\narms = {\\"gen\\": BetaArm(1, 1), \\"refine\\": BetaArm(1, 1)}\\nrng = np.random.default_rng(0)\\np_gen, p_refine = 0.20, 0.45\\n\\nhistory = []\\nfor _ in range(80):\\n    action = thompson_choose(arms, rng)\\n    reward = mock_scorer(action, p_gen, p_refine, rng)\\n    arms[action].update(reward)\\n    history.append((action, reward))\\n\\nn_gen = sum(1 for a, _ in history if a == \\"gen\\")\\nn_ref = len(history) - n_gen\\nprint(\\"80 轮中 GEN 次数:\\", n_gen, \\"| REFINE 次数:\\", n_ref)\\nprint(\\"GEN 后验 Beta:\\", (arms[\\"gen\\"].alpha, arms[\\"gen\\"].beta))\\nprint(\\"REFINE 后验 Beta:\\", (arms[\\"refine\\"].alpha, arms[\\"refine\\"].beta))\\n",
+   "id": "8c3f68b6"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import matplotlib.pyplot as plt\\n\\ndef simulate(strategy, p_gen, p_refine, budget, seeds=400):\\n    \\"\\"\\"模拟一种分支策略，返回随动作数增长的累计成功率曲线。\\"\\"\\"\\n    curves = np.zeros((seeds, budget))\\n    for seed in range(seeds):\\n        rng = np.random.default_rng(seed)\\n        best = 0.0\\n        if strategy == \\"widen\\":\\n            for t in range(budget):\\n                if rng.random() < p_gen:\\n                    best = 1.0\\n                curves[seed, t] = best\\n        elif strategy == \\"deepen\\":\\n            for t in range(budget):\\n                p = p_gen if t == 0 else p_refine\\n                if rng.random() < p:\\n                    best = 1.0\\n                curves[seed, t] = best\\n        else:  # adaptive\\n            arms = {\\"gen\\": BetaArm(1, 1), \\"refine\\": BetaArm(1, 1)}\\n            for t in range(budget):\\n                action = thompson_choose(arms, rng)\\n                reward = mock_scorer(action, p_gen, p_refine, rng)\\n                arms[action].update(reward)\\n                if reward == 1:\\n                    best = 1.0\\n                curves[seed, t] = best\\n    return curves.mean(axis=0)\\n\\nbudget = 25\\np_gen, p_refine = 0.20, 0.45\\nstrategies = {\\"widen\\": \\"Widen (repeated sampling)\\",\\n              \\"deepen\\": \\"Deepen (sequential refinement)\\",\\n              \\"adaptive\\": \\"Adaptive (Thompson)\\"}\\nxs = np.arange(1, budget + 1)\\n\\nfig, axes = plt.subplots(1, 2, figsize=(13, 4.2))\\nfor name, label in strategies.items():\\n    curve = simulate(name, p_gen, p_refine, budget)\\n    axes[0].plot(xs, curve, marker=\\"o\\", markersize=3, label=label)\\naxes[0].set_xlabel(\\"actions\\")\\naxes[0].set_ylabel(\\"success rate\\")\\naxes[0].set_title(\\"Widen vs Deepen vs Adaptive\\")\\naxes[0].legend()\\naxes[0].grid(alpha=0.3)\\n\\n# 自适应策略的动作分配\\narms = {\\"gen\\": BetaArm(1, 1), \\"refine\\": BetaArm(1, 1)}\\nrng = np.random.default_rng(1)\\nallocation = []\\nfor _ in range(budget):\\n    action = thompson_choose(arms, rng)\\n    reward = mock_scorer(action, p_gen, p_refine, rng)\\n    arms[action].update(reward)\\n    allocation.append(action)\\n\\naxes[1].bar([\\"GEN\\", \\"REFINE\\"], [allocation.count(\\"gen\\"), allocation.count(\\"refine\\")],\\n            color=[\\"#90a4ae\\", \\"#4caf50\\"])\\naxes[1].set_title(\\"Adaptive action allocation\\")\\naxes[1].set_ylabel(\\"count\\")\\nplt.tight_layout()\\nplt.show()\\n\\nprint(\\"一次运行中 GEN / REFINE 分配:\\", allocation.count(\\"gen\\"),\\n      \\"/\\", allocation.count(\\"refine\\"))\\n",
+   "id": "9360b64a"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 小结\\n\\n这一节围绕\\"多步任务里下一步走哪条路\\"展开。所学内容：\\n\\n- [ ] 单步推理的局限：整体生成与贪心解码都会让错误沿单条路径累积，且无法回退\\n- [ ] ADaPT 按需分解：executor 先试，失败才由 planner 拆，递归控制，AND/OR 组合；拆的深度由任务难度决定\\n- [ ] LATS 树搜索：节点是状态，UCT 平衡探索与利用，价值回溯用增量均值，反思作为语义记忆\\n- [ ] SPRINT 并行：阶段号公式把独立步骤打包，plan-only 父节点不产生阶段边界\\n- [ ] Wider or Deeper 自适应分支：GEN 加宽、REFINE 加深，Thompson 采样在线决定分配\\n- [ ] 分解解决任务难度，搜索解决路径不确定，并行解决延迟，训练解决每次都要现搜的成本\\n\\n还有一条训练视角的路线：SWiRL 不靠推理时的搜索，而把\\"什么时候分解、什么时候调工具\\"直接训练进模型参数。这一讲的方法都在推理时想办法，SWiRL 把规划能力装进模型，是通向第 6 讲训练期缩放的桥梁。\\n",
+   "id": "731f282b"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 作业\\n\\n> 可以让 AI 帮忙解释思路，但不建议直接让 AI \\"做完这道题\\"。\\n\\n三道题各有一处空位，参考答案已填入代码，先在心里手算，再运行核对 assert。\\n",
+   "id": "9b74ab47"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "**作业 1：补全 UCT 选择公式**\\n\\n给一棵树的四个子节点（各有价值与访问次数）和父节点访问次数，补全 UCT 公式，选出 w=1 时应展开的子节点。\\n\\n小提示：探索项是 $w\\\\sqrt{\\\\ln N(p)/N(s)}$，先想清楚哪个量的增长会让探索需求只缓慢增加。\\n",
+   "id": "cdd85c3c"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "import numpy as np\\n\\n# 作业 1：补全 UCT 选择公式\\n# 空位处应补 w * np.sqrt(np.log(N_parent) / n)\\nchildren_v = np.array([0.30, 0.50, 0.10, 0.00])\\nchildren_n = np.array([10, 5, 8, 1])\\nN_parent = 24.0\\nw = 1.0\\n\\ndef uct_score(v, n):\\n    return v + w * np.sqrt(np.log(N_parent) / n)   # 空位在这里\\n\\nscores = uct_score(children_v, children_n)\\nprint(\\"UCT 分数:\\", np.round(scores, 3))\\nassert int(np.argmax(scores)) == 3, \\"选出的子节点与手算不一致\\"\\nprint(\\"选中的子节点索引:\\", int(np.argmax(scores)))\\nprint(\\"收获：w 固定时，访问次数少的子节点因探索项获得更高分数\\")\\n",
+   "id": "c3cda741"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "**作业 2：补全价值回溯（增量均值）**\\n\\n给一条根→A→叶的路径和各节点的旧访问次数、旧价值，奖励 r=1，补全回溯更新式，验证叶与根的新价值。\\n\\n小提示：$V(s)\\\\leftarrow\\\\big(V(s)\\\\cdot N(s)+r\\\\big)/(N(s)+1)$，先算新的 N，再算新的 V。\\n",
+   "id": "82988ac5"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 作业 2：补全 LATS 的价值回溯（增量均值）\\n# 空位处应补 (v_old * n_old + r) / n_new\\npath = [(\\"root\\", 10, 0.35), (\\"A\\", 4, 0.40), (\\"leaf\\", 2, 0.50)]\\nr = 1.0\\n\\nupdated = []\\nfor name, n_old, v_old in path:\\n    n_new = n_old + 1\\n    v_new = (v_old * n_old + r) / n_new   # 空位在这里\\n    updated.append((name, n_new, v_new))\\n\\nfor name, n, v in updated:\\n    print(f\\"{name}: N={n}, V={v:.4f}\\")\\n\\nassert abs(updated[-1][2] - (0.50 * 2 + 1) / 3) < 1e-6, \\"叶节点价值回溯不一致\\"\\nassert abs(updated[0][2] - (0.35 * 10 + 1) / 11) < 1e-6, \\"根节点价值回溯不一致\\"\\nprint(\\"收获：奖励 r 沿根到叶的路径逐层回传，先更新访问次数，再更新价值\\")\\n",
+   "id": "4f84d1dd"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "**作业 3：补全 SPRINT 阶段号计算**\\n\\n给一张含 plan-only 父节点的依赖表，补全阶段号公式里的增量项，验证两个独立计算同属一个阶段。\\n\\n小提示：只有父节点有执行阶段（has_exec 为 True）才把子节点推迟到下一阶段。\\n",
+   "id": "fdf1e344"
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": "# 作业 3：补全 SPRINT 阶段号计算（含 plan-only 优化）\\n# 空位处应补 1 if steps[d][\\"has_exec\\"] else 0\\nsteps = {\\n    \\"S1 读题分析\\":     {\\"has_exec\\": False, \\"deps\\": []},\\n    \\"S2 拆成 40 与 7\\": {\\"has_exec\\": False, \\"deps\\": [\\"S1 读题分析\\"]},\\n    \\"S3 算 23×40\\":     {\\"has_exec\\": True,  \\"deps\\": [\\"S2 拆成 40 与 7\\"]},\\n    \\"S4 算 23×7\\":      {\\"has_exec\\": True,  \\"deps\\": [\\"S2 拆成 40 与 7\\"]},\\n    \\"S5 汇总\\":         {\\"has_exec\\": True,  \\"deps\\": [\\"S3 算 23×40\\", \\"S4 算 23×7\\"]},\\n}\\n\\ndef stage_numbers(steps):\\n    out = {}\\n    def solve(name):\\n        if name in out:\\n            return out[name]\\n        deps = steps[name][\\"deps\\"]\\n        if not deps:\\n            out[name] = 1\\n            return 1\\n        val = 0\\n        for d in deps:\\n            inc = 1 if steps[d][\\"has_exec\\"] else 0   # 空位在这里\\n            val = max(val, solve(d) + inc)\\n        out[name] = val\\n        return val\\n    for name in steps:\\n        solve(name)\\n    return out\\n\\ns = stage_numbers(steps)\\nfor name, v in s.items():\\n    print(f\\"{name}: 阶段 {v}\\")\\n\\nassert s[\\"S3 算 23×40\\"] == 1 and s[\\"S4 算 23×7\\"] == 1, \\"两个独立计算应同属阶段 1\\"\\nassert s[\\"S5 汇总\\"] == 2, \\"汇总依赖执行结果，应落后一个阶段\\"\\nprint(\\"收获：plan-only 父节点不把子节点推到下一阶段，独立步骤因此能并行\\")\\n",
+   "id": "98a4de1e"
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": "## 参考资料\\n\\n- Zhou et al., [Language Agent Tree Search Unifies Reasoning, Acting, and Planning in Language Models](https://arxiv.org/abs/2310.04406) — 本讲树搜索主线，MCTS 与 LLM 结合的第一篇通用框架\\n- Prasad et al., [ADaPT: As-Needed Decomposition and Planning with Language Models](https://arxiv.org/abs/2311.05772) — 分解思路，按需递归分解与 AND/OR 计划\\n- Biju et al., [SPRINT: Enabling Interleaved Planning and Parallelized Execution in Reasoning Models](https://arxiv.org/abs/2506.05745) — 并行执行，DAG 打包与 planner/executor 滚动循环\\n- Inoue et al., [Wider or Deeper? Scaling LLM Inference-Time Compute with Adaptive Branching Tree Search](https://arxiv.org/abs/2503.04412) — 自适应分支，GEN 节点与 Thompson 采样\\n- Goldie et al., [SWiRL: Synthetic Data Generation & Multi-Step RL for Reasoning & Tool Use](https://arxiv.org/abs/2504.04736) — 训练视角，逐步 RL 与 process/outcome 过滤对比\\n- 前置概念（可复习）：Chain-of-Thought（Wei et al., 2022）、Self-Consistency（Wang et al., 2022）、ReAct（Yao et al., 2023）、Tree-of-Thought（Yao et al., 2023）、Reflexion（Shinn et al., 2023）、UCT（Kocsis & Szepesvári, 2006）\\n",
+   "id": "17f8b0da"
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.13"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}`;export{n as default};

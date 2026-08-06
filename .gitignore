@@ -13,3 +13,10 @@ papers/lecture-*/**/*.txt
 
 # 本地执行产物
 *.log
+
+# 前端
+web/node_modules/
+web/dist/
+
+# GitHub Pages 构建产物（部署源为 main 分支的 /docs 目录，需提交）
+# 若改用 GitHub Actions 工作流自动构建，可取消提交并忽略 docs/
