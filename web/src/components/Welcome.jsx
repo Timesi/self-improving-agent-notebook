@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import {
   BookOpen, ArrowRight, Check, Layers, Cpu, Star,
-  Monitor, Languages, ChevronRight, CodeXml, Rocket, Sparkles, Menu,
-  Mail, X, ExternalLink,
+  Monitor, Languages, CodeXml, Rocket, Sparkles, Menu,
+  ExternalLink,
 } from 'lucide-react'
 import { GITHUB_OWNER, GITHUB_REPO } from '../config.js'
 import { PATH_STEPS, RUNNABLE_NOTEBOOKS } from '../data/sidebar.js'
@@ -178,147 +178,8 @@ const NOTEBOOK_SVGS = {
   ),
 }
 
-function ReaderLetterModal({ isOpen, onClose, lang }) {
-  useEffect(() => {
-    if (!isOpen) return
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [isOpen, onClose])
-
-  if (!isOpen) return null
-
-  const isZh = lang === 'zh'
-  const title = isZh ? '给读者的一封信' : 'A Letter to Readers'
-  const eyebrow = isZh ? '开始之前，先看清这条路会带你去哪' : 'Before you start, see where this path leads'
-  const intro = isZh
-    ? '亲爱的读者：你好。在正式开始之前，我想简单聊聊，做这套教程的初衷。'
-    : 'This tutorial answers one concrete question: how does an agent grow from loops, verifiers, planning, RL, and memory instead of framework magic?'
-  const sections = isZh ? [
-    {
-      heading: null,
-      items: [
-        '现在想学 Agent 的人越来越多，大家每天都会接触到各式各样的名词：ReAct、验证器、GRPO、树搜索、记忆分页。看得多、搜得多，但大多只是零散的碎片，心里始终差一条完整的主线。市面上关于 LLM 的教程很多，真正把 Agent 从底层循环、验证、规划、训练到评测完整串起来的却很少。',
-      ],
-    },
-    {
-      heading: null,
-      items: [
-        '这也让很多人卡在同一个尴尬的状态：会调模型 API、会套 Agent 框架，却始终搞不懂一个 Agent 究竟如何从零搭建、如何被验证、如何通过强化学习变强、又如何被可靠地评测。',
-      ],
-    },
-    {
-      heading: null,
-      items: [
-        '我会和你一起走过一条完整的 Agent 知识链路：既吃透底层机制，也看懂当下前沿。从 ReAct 循环、Test-time Compute、验证器开始，到树搜索、GRPO 强化学习、开放进化、记忆与评测，再到数学证明、机器人等前沿方向。不求速成，只求通透。',
-      ],
-    },
-    {
-      heading: null,
-      items: [
-        '学完这套内容，你不只会调用框架，而是能亲手实现 Agent 的每一个核心算法：自己写 ReAct 循环、自己训练验证器、自己跑 GRPO 更新、自己搭评测 Harness。',
-      ],
-    },
-    {
-      heading: null,
-      items: [
-        '非常感谢你愿意翻开这篇前言，愿意沉下心深耕底层、吃透原理。也许，未来设计出下一代 Agent 架构的人会是你，让机器真正拥有自主思考能力的突破，也终将由你带来。',
-      ],
-    },
-    {
-      heading: null,
-      items: [
-        'Agent 终将重塑人类与技术交互的方式，站在这场变革的浪潮里，在历史的面前，比起害怕，不如鼓起勇气尽情享受，祝你与我在探索的路途上好运！',
-      ],
-    },
-  ] : [
-    {
-      heading: 'What you will walk through',
-      items: [
-        'Start from the agent loop: thought, action, observation, and tool use.',
-        'Hand-build test-time compute scaling, verifiers, and tree-search planning.',
-        'Train for reasoning with STaR bootstrapping and GRPO.',
-        'Open-ended evolution, search agents, and memory systems.',
-        'Evaluate long-horizon agents and turn frontier papers into runnable examples.',
-      ],
-    },
-    {
-      heading: 'What you will have at the end',
-      items: [
-        'A complete from-zero agent path: loops, verification, planning, RL, memory, evaluation.',
-        'Working implementations of every core algorithm, not framework calls.',
-        'A mental map for new agent papers: whether they change loops, verification, training, or evaluation.',
-      ],
-    },
-    {
-      heading: 'How to study it',
-      items: [
-        'Read the intuition first, verify with small numbers, then run the code and inspect the output.',
-        'When stuck, ask what problem the component solves and what shapes flow in and out.',
-        'Use AI for hints and direction checks, but still edit code, run experiments, and observe behavior yourself.',
-      ],
-    },
-  ]
-
-  return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="modal-backdrop" onClick={onClose} />
-      <div className="modal-card" style={{ maxWidth: 760, maxHeight: '86vh' }}>
-        <div className="modal-header">
-          <div className="min-w-0">
-            <div className="text-[10px] sm:text-[11px] font-extrabold tracking-[0.12em] uppercase text-violet-600 mb-1">
-              {eyebrow}
-            </div>
-            <h2>{title}</h2>
-          </div>
-          <button className="modal-close" onClick={onClose} aria-label={isZh ? '关闭' : 'Close'}>
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="modal-body">
-          <div className="space-y-6 text-[13px] sm:text-sm leading-7 text-[var(--text-secondary)]">
-            <p className="text-base sm:text-lg leading-8 font-bold text-[var(--text-primary)]">
-              {intro}
-            </p>
-
-            {sections.map((section, idx) => (
-              <section key={section.heading || idx} className="space-y-3">
-                {section.heading && (
-                  <h3 className="text-[15px] sm:text-base font-extrabold text-[var(--text-primary)]">
-                    {section.heading}
-                  </h3>
-                )}
-                <div className="space-y-2.5">
-                  {section.items.map((item) => (
-                    <div key={item} className="flex gap-2.5">
-                      {section.heading && <Check className="w-4 h-4 mt-1 text-violet-600 shrink-0" />}
-                      <p>{item}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            {!isZh && (
-              <div className="rounded-2xl border border-violet-200/70 bg-violet-50/80 p-4 text-violet-900">
-                <p className="font-bold">
-                  In one sentence: this is not an API tour, but a path to open up, modify, train, and evaluate an LLM system from the inside.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onStartTour }) {
   const [starCount, setStarCount] = useState(null)
-  const [isLetterOpen, setIsLetterOpen] = useState(false)
   const catalogById = new Map(catalog.map(item => [item.id, item]))
   const notebookCount = catalog.length
 
@@ -361,8 +222,6 @@ export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onS
     bannerDesc: 'Self-Improving Agent Notebook 通过交互式 Notebook，带你从零实现会自我进化的 Agent：循环、验证、规划、强化学习与记忆。',
     startBtn: '开始学习',
     browsePath: '浏览学习路径',
-    readerLetter: '给读者的一封信',
-    readerLetterDesc: '给读者们的一封信',
     runHintTitle: '每篇 Notebook 都可以直接运行',
     runHintDesc: '进入章节后，点击顶部按钮即可在 ModelScope 或 Colab 中打开，无需本地配置。',
     check1: '交互式 Notebook', check2: '逐步构建知识', check3: '代码即文档', check4: '实验即理解',
@@ -389,8 +248,6 @@ export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onS
     bannerDesc: 'Self-Improving Agent Notebook guides you into self-improving agents — loops, verifiers, planning, RL, and memory — via interactive Notebooks.',
     startBtn: 'Start Learning',
     browsePath: 'Browse Pathways',
-    readerLetter: 'A Letter to Readers',
-    readerLetterDesc: 'See the full route, final builds, and skills you will gain',
     runHintTitle: 'Run every Notebook online',
     runHintDesc: 'Open a chapter, then use the top buttons to launch it in ModelScope or Colab. No local setup needed.',
     check1: 'Interactive Notebook', check2: 'Step-by-step Knowledge', check3: 'Code as Document', check4: 'Understand via Experiments',
@@ -457,16 +314,6 @@ export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onS
                   className="h-10 sm:h-12 px-5 sm:px-6 rounded-full bg-white hover:bg-[var(--bg-input)] text-slate-700 border border-[var(--border-light)]/90 font-bold text-xs sm:text-sm active:scale-[0.98] transition-all"
                 >
                   {t.browsePath}
-                </button>
-                <button
-                  onClick={() => setIsLetterOpen(true)}
-                  className="group h-10 sm:h-12 px-3 sm:px-4 rounded-xl border border-violet-200/80 bg-white/85 hover:bg-white shadow-sm hover:shadow-md transition-all active:scale-[0.99] flex items-center gap-2"
-                >
-                  <Mail className="w-4 h-4 text-violet-600 shrink-0" />
-                  <span className="text-xs sm:text-sm font-extrabold text-slate-900 whitespace-nowrap">
-                    {t.readerLetter}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-violet-600 group-hover:translate-x-0.5 transition-transform shrink-0" />
                 </button>
               </div>
 
@@ -735,11 +582,6 @@ export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onS
         <div className="w-full flex items-center justify-center pt-2 pb-6 select-none">
           <span className="text-xs text-[var(--text-label)] tracking-wide">{t.footerQuote}</span>
         </div>
-        <ReaderLetterModal
-          isOpen={isLetterOpen}
-          onClose={() => setIsLetterOpen(false)}
-          lang={lang}
-        />
     </div>
   )
 }
