@@ -104,7 +104,7 @@ Agent 化逐一突破这四条边界：
 
 按 OUTLINE.md，课程共 4 部分、17 个 notebook（L10-12 是中期展示，无教学内容）：
 
-- **Part 1 Foundation（L1-L5）**：从"LLM 只能生成"出发逐层加能力——test-time compute 缩放（L2）、鲁棒验证（L3）、工具与代码反馈（L4）、多步规划（L5）。
+- **Part 1 Foundation（L1-L5）**：从"LLM 只能生成"出发逐层加能力——test-time compute 缩放（L2）、答案验证（L3）、工具与代码反馈（L4）、多步规划（L5）。
 - **Part 2 Training & Evolution（L6-L9）**：Agent 不是写死的，要训练与进化——RL 训练期缩放（L6）、开放进化让 Agent 设计 Agent（L7）、搜索与深度研究 Agent（L8）、从 Chatbot 到 Agent 的后训练演进（L9）。
 - **Part 3 Agent Engineering（L13/L14/L17）**：把 Agent 做成工程——SWE Agent（L13）、记忆系统（L14）、评测与长程任务（L17）。
 - **Part 4 Frontiers（L15/L16/L18-L20）**：边界在哪里——LLM 推理（L15）、数学 Agent（L16）、自治 Agent（L18）、多模态机器人（L19）、未来方向（L20）。

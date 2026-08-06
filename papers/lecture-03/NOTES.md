@@ -1,4 +1,4 @@
-# Lecture 03 — 鲁棒验证：让模型检查模型 研读笔记
+# Lecture 03 — 答案验证：让模型检查模型 研读笔记
 
 > 本文件是 CS329A 第 03 讲的论文研读笔记，是编写对应 notebook 的素材。
 > 来源：https://cs329a.stanford.edu/（Autumn 2025 课程大纲）

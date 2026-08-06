@@ -30,7 +30,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 03-robust-verification.ipynb — 鲁棒验证：让模型检查模型
+### 03-robust-verification.ipynb — 答案验证：让模型检查模型
 
 - 1. 生成与验证的差距
 - 2. 验证器的训练：Cobbe 的数学验证器

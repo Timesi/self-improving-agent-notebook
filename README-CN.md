@@ -21,9 +21,8 @@
 </p>
 
 <p align="center">
-  <a href="#这门课能让你学会什么">能学到什么</a> ·
+  <a href="#课程定位">课程定位</a> ·
   <a href="#学习路线">学习路线</a> ·
-  <a href="#你会亲手实现什么">你会实现什么</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#项目状态">项目状态</a> ·
   <a href="#课程地图">课程地图</a> ·
@@ -34,74 +33,43 @@
 
 ---
 
-## 这门课能让你学会什么
+## 课程定位
 
-17 本 notebook，你从零实现现代 AI Agent 背后的**每一个核心算法**——而且每写一行代码前，都先用具体
-数字手算一遍。不用框架、不碰黑盒。学完后，你打开任何一篇 Agent 论文，都能一眼看出它改的是系统
-的哪一块。
+这是一个从零拆解 Agent 的动手课程：用 17 本可运行 notebook，
+从最小循环一路走到搜索、训练、记忆、评测和自治系统。每个核心算法都先用具体数字手算，
+再写成短小代码；不依赖框架，也不把关键步骤藏在黑盒里。
 
-你会亲手实现：
-
-- **一个 Agent 循环**——模型每轮输出"思考 + 动作"，工具执行动作，结果喂回去，直到任务完成
-- **一个验证器**——训练一个小模型给答案打分：结果级看最终对错，过程级检查每一步
-- **一个 ReAct Agent**——接上搜索、计算器等真实工具，看着它"边想边做"
-- **一棵搜索树**——保留多条候选路径、把奖励回传（UCT 手算），而不是贪心走一步
-- **一次 GRPO 更新**——推理模型背后的"组内相对强化学习"规则，逐步手算推导
-- **一个进化循环**——让 Agent 设计更好的 Agent，并复现它掉进的"奖励黑客"陷阱
-- **一套记忆系统**——分层上下文 + KV 缓存复用，让记忆超出上下文窗口
-- **一个评测 Harness**——拟合"人类要多久、Agent 要多久"的能力曲线
-
-每本 notebook 都遵循同一个契约：`直觉理解 → 手算验证 → 代码实现 → 实验观察`，并且无需 API key
-就能用确定性 mock 离线跑通；配上 key，同一个 cell 立刻接上真实模型。
+每本 notebook 遵循同一个学习契约：`直觉理解 → 手算验证 → 代码实现 → 实验观察`。
+默认使用确定性 mock，离线即可跑通；配置 OpenAI 兼容 API 后，同一套代码可切换到真实模型。
 
 ## 课程路线
 
-17 讲是一条渐进的路：每讲加一块新能力，并接住上一讲留下的问题。
+建议按顺序阅读。前面的 notebook 先把基本组件讲清楚，后面再把它们放进训练、工程和自治场景。
 
-| # | 讲座 | 学完你能... |
+| # | 讲座 | 这一讲做什么 |
 |:--:|:--|:--|
-| 01 | 课程总览 | 说清 Agent 是什么，跑通最小循环 |
-| 02 | Test-time Compute | 用"多采样 + 投票"提升准确率 |
-| 03 | 鲁棒验证 | 训练一个验证器，分清答案好坏 |
-| 04 | 工具与代码反馈 | 做一个会调真实工具的 ReAct Agent |
-| 05 | 多步推理与规划 | 在动作空间里做树搜索，而不是猜一步 |
-| 06 | 训练期 RL | 手算一次 GRPO 更新，把推理训练进模型 |
-| 07 | 开放进化 | 让 Agent 改进 Agent，并识破奖励黑客 |
-| 08 | 搜索与深度研究 | 跑 AlphaCode 规模的"采样-过滤-聚类" |
-| 09 | 后训练演进 | 看清一个模型从 Chatbot 到 Agent 的一生 |
-| 13 | 软件工程智能体 | 让 Agent 迭代地修复真实代码 |
-| 14 | 智能体记忆 | 给 Agent 一份超出上下文窗口的记忆 |
-| 17 | Agent 评测 | 度量 Agent 到底能完成什么 |
-| 15 | LLM 推理 | 解释 CoT 为什么有效、"涌现"何时为真 |
-| 16 | 数学推理 | 把神经网络的提议和符号验证器结合起来 |
-| 18 | 自治系统 | 检错、恢复、决定何时交给人类 |
-| 19 | 多模态机器人 | 把连续的机器人动作变成模型能输出的 token |
-| 20 | 未来研究方向 | 点出还没解决的问题、可以从哪入手 |
+| 01 | 课程总览 | 从一个最小循环开始，明确 Agent 和普通 Chatbot 的区别 |
+| 02 | Test-time Compute | 比较重复采样、投票和 best-of-n |
+| 03 | 答案验证 | 实现结果验证和过程验证 |
+| 04 | 工具与代码反馈 | 把搜索、计算器和代码执行接进 ReAct 循环 |
+| 05 | 多步推理与规划 | 用 UCT 搜索多步动作，而不是只选下一步 |
+| 06 | 训练期 RL | 手算一轮 GRPO，并观察奖励如何改变策略 |
+| 07 | 开放进化 | 运行一个自动改进 Agent 的循环，复现奖励黑客 |
+| 08 | 搜索与深度研究 | 把采样、过滤和聚类用于程序与资料搜索 |
+| 09 | 后训练演进 | 梳理 SFT、RLHF、RLVR 到 Agent 的训练链路 |
+| 10 | 软件工程智能体 | 让 Agent 在测试反馈下修改真实代码 |
+| 11 | 智能体记忆 | 用分层上下文和 KV 复用处理长任务 |
+| 12 | LLM 推理 | 检查 CoT、自洽投票和“涌现”说法 |
+| 13 | 数学推理 | 将模型提出的步骤交给符号验证器检查 |
+| 14 | Agent 评测 | 用统一 Harness 测量通过率和任务时长 |
+| 15 | 自治系统 | 处理失败、重试，并在必要时请求人工接管 |
+| 16 | 多模态机器人 | 将视觉和连续动作编码成模型可输出的 token |
+| 17 | 未来研究方向 | 盘点可靠性、扩展监督和协调中的开放问题 |
 
-### 各讲怎么连起来
+### 内容之间的关系
 
-不是 17 个孤立话题——概念在讲与讲之间传递：
-
-- **投票 → 验证 → 搜索**（L2→L3→L5）：投票用的分数，变成验证器，再变成树搜索里选节点的依据
-- **验证 → RL 奖励 → 适应度**（L3→L6→L7）：同一个验证器先当训练信号，再当进化的适应度
-- **采样 → 规模化搜索**（L2→L8）："多问几次"放大到百万候选，就是 AlphaCode
-- **循环 → 装进树 → 跑在代码上**（L4→L5→L13）：同一个 ReAct 循环，三种用法
-- **奖励黑客 → 评测要防的 → Goodhart**（L7→L17→L20）
-
-## 你会亲手实现什么
-
-| 你会亲手实现 | 一句话说明（不堆术语） |
-|:---|:---|
-| 一个 Agent 循环 | 模型每轮输出"思考 + 动作"，动作在工具里执行，结果喂回去，直到任务完成 |
-| 重复采样与投票 | 同一个问题让模型答 N 次，多数票获胜；看清"生成容易、挑难" |
-| 一个验证器 | 训练一个小模型给答案打分：结果级只看最后对错，过程级检查每一步 |
-| 一个 ReAct Agent | 给模型接上搜索、计算器等工具，看着它"边想边做"地完成任务 |
-| 一棵搜索树 | 把任务当成树：选择节点 → 扩展 → 评估 → 把结果回传给祖先（手算 UCT 与回传） |
-| 一个 GRPO 更新 | 手算一组样本的 advantage，跑一轮"组内相对强化学习"更新 |
-| 一个进化循环 | 让一个"设计 Agent"生成 Agent 代码、评分、入库、再改进；并复现奖励黑客 |
-| 一个分层记忆 | 主上下文装不下时，把旧信息换出、需要时召回；理解 KV 缓存复用 |
-| 一个评测 Harness | 定义任务、跑 Agent、汇总通过率；用时间视野拟合"能力-时长"曲线 |
-| 一个证明搜索器 | 让模型出证明步骤、验证器逐条把关，理解 AlphaProof 的思路 |
+前五讲建立 Agent 的基本工具：采样得到候选，验证器负责打分，树搜索负责组合多步动作。
+第六至九讲把这些组件用于训练和规模化搜索；后面的工程与前沿部分则关注记忆、评测、自治和具身系统。
 
 ## 快速开始
 
@@ -178,7 +146,7 @@ Self-Improving Agent Notebook
 ├── Part 1 · 基础与方法（L1-L5）     # 循环、test-time compute、验证、工具、规划
 │   ├── 01 课程总览
 │   ├── 02 Test-time Compute 缩放
-│   ├── 03 鲁棒验证
+│   ├── 03 答案验证
 │   ├── 04 工具使用与代码反馈
 │   └── 05 多步推理与规划
 │
@@ -188,17 +156,17 @@ Self-Improving Agent Notebook
 │   ├── 08 搜索与深度研究智能体
 │   └── 09 后训练演进：从 Chatbot 到 Agent
 │
-├── Part 3 · 智能体工程（L13/L14/L17）# 让它真的能用
-│   ├── 13 软件工程智能体
-│   ├── 14 智能体记忆
-│   └── 17 Agent 评测与长程任务
+├── Part 3 · 智能体工程（L10/L11/L14）# 让它真的能用
+│   ├── 10 软件工程智能体
+│   ├── 11 智能体记忆
+│   └── 14 Agent 评测与长程任务
 │
-└── Part 4 · 前沿（L15-L20）         # 边界在哪里
-    ├── 15 LLM 推理
-    ├── 16 数学推理：AlphaProof 与 AlphaGeometry
-    ├── 18 构建自治智能体
-    ├── 19 多模态机器人智能体
-    └── 20 未来研究方向
+└── Part 4 · 前沿（L12-L17）         # 边界在哪里
+    ├── 12 LLM 推理
+    ├── 13 数学推理：AlphaProof 与 AlphaGeometry
+    ├── 15 构建自治智能体
+    ├── 16 多模态机器人智能体
+    └── 17 未来研究方向
 ```
 
 每本 notebook 自包含，可独立运行。原始课程中的 L10-12 是中期展示，没有 notebook。
@@ -211,7 +179,7 @@ Self-Improving Agent Notebook
 |:---:|:---|:---|:---|
 | 01 | [课程总览](notebooks/part1-foundation/01-course-overview.ipynb) | 什么是 Agent，为什么它是 Chatbot 的下一步？ | 最小循环骨架、动作解析器 |
 | 02 | [Test-time Compute 缩放](notebooks/part1-foundation/02-test-time-compute.ipynb) | 推理期多花算力为什么有用？ | 重复采样、self-consistency、best-of-n |
-| 03 | [鲁棒验证](notebooks/part1-foundation/03-robust-verification.ipynb) | 如何检查模型生成出的答案？ | ORM vs PRM、验证器训练、步级奖励 |
+| 03 | [答案验证](notebooks/part1-foundation/03-robust-verification.ipynb) | 如何检查模型生成出的答案？ | ORM vs PRM、验证器训练、步级奖励 |
 | 04 | [工具使用与代码反馈](notebooks/part1-foundation/04-tool-code-feedback.ipynb) | Agent 如何在环境中行动？ | ReAct 循环、工具注册表、执行奖励 |
 | 05 | [多步推理与规划](notebooks/part1-foundation/05-multi-step-planning.ipynb) | Agent 如何规划一步之外？ | 任务分解、UCT 树搜索、并行执行 |
 
@@ -224,23 +192,23 @@ Self-Improving Agent Notebook
 | 08 | [搜索与深度研究](notebooks/part2-training/08-search-deep-research.ipynb) | Agent 如何搜索程序与知识？ | 采样-过滤-聚类、按需检索 |
 | 09 | [后训练演进](notebooks/part2-training/09-post-training-evolution.ipynb) | 后训练如何从 Chatbot 演进到 Agent？ | SFT vs RLHF vs RLVR、信号来源 |
 
-### Part 3 · 智能体工程
+### Part 3 · 智能体工程（10–11、14）
 
 | # | Notebook | 核心问题 | 实现重点 |
 |:---:|:---|:---|:---|
-| 13 | [软件工程智能体](notebooks/part3-engineering/13-swe-agents.ipynb) | Agent 如何修复真实代码？ | 覆盖-选择、串行修复循环 |
-| 14 | [智能体记忆](notebooks/part3-engineering/14-agent-memory.ipynb) | Agent 如何记住看到过的东西？ | 分层上下文、逐出、KV 复用 |
-| 17 | [Agent 评测](notebooks/part3-engineering/17-agent-evaluation.ipynb) | 如何度量长时程 Agent？ | 评测 Harness、胜率、时间视野 |
+| 10 | [软件工程智能体](notebooks/part3-engineering/13-swe-agents.ipynb) | Agent 如何修复真实代码？ | 覆盖-选择、串行修复循环 |
+| 11 | [智能体记忆](notebooks/part3-engineering/14-agent-memory.ipynb) | Agent 如何记住看到过的东西？ | 分层上下文、逐出、KV 复用 |
+| 14 | [Agent 评测](notebooks/part3-engineering/17-agent-evaluation.ipynb) | 如何度量长时程 Agent？ | 评测 Harness、胜率、时间视野 |
 
-### Part 4 · 前沿
+### Part 4 · 前沿（12–13、15–17）
 
 | # | Notebook | 核心问题 | 实现重点 |
 |:---:|:---|:---|:---|
-| 15 | [LLM 推理](notebooks/part4-frontiers/15-llm-reasoning.ipynb) | 推理能力从哪里来？ | CoT、自洽投票、涌现度量 |
-| 16 | [数学推理](notebooks/part4-frontiers/16-alphaproof-math.ipynb) | 验证器 + 搜索如何证明定理？ | 符号引擎、证明验证器、搜索 |
-| 18 | [自治系统](notebooks/part4-frontiers/18-autonomy-agents.ipynb) | 从演示到自治之间缺什么？ | 可靠性、自检重试、监督 |
-| 19 | [多模态机器人](notebooks/part4-frontiers/19-multimodal-robotics.ipynb) | VLA 模型如何工作？ | 动作离散化、词汇表屏蔽 |
-| 20 | [未来研究方向](notebooks/part4-frontiers/20-future-research.ipynb) | 还有什么没解决？ | 开放问题、Goodhart、协调 |
+| 12 | [LLM 推理](notebooks/part4-frontiers/15-llm-reasoning.ipynb) | 推理能力从哪里来？ | CoT、自洽投票、涌现度量 |
+| 13 | [数学推理](notebooks/part4-frontiers/16-alphaproof-math.ipynb) | 验证器 + 搜索如何证明定理？ | 符号引擎、证明验证器、搜索 |
+| 15 | [自治系统](notebooks/part4-frontiers/18-autonomy-agents.ipynb) | 从演示到自治之间缺什么？ | 可靠性、自检重试、监督 |
+| 16 | [多模态机器人](notebooks/part4-frontiers/19-multimodal-robotics.ipynb) | VLA 模型如何工作？ | 动作离散化、词汇表屏蔽 |
+| 17 | [未来研究方向](notebooks/part4-frontiers/20-future-research.ipynb) | 还有什么没解决？ | 开放问题、Goodhart、协调 |
 
 ## 质量标准
 
@@ -292,8 +260,8 @@ self-improving-agent-notebook/
 ├── notebooks/                    # 中文 notebook（17 本）
 │   ├── part1-foundation/         # 01-05
 │   ├── part2-training/           # 06-09
-│   ├── part3-engineering/        # 13, 14, 17
-│   └── part4-frontiers/          # 15, 16, 18, 19, 20
+│   ├── part3-engineering/        # 10, 11, 14
+│   └── part4-frontiers/          # 12, 13, 15, 16, 17
 ├── papers/                       # 每讲研读笔记（NOTES.md）；论文 PDF 可复现
 ├── scripts/download_papers.py    # 从 arXiv 解析并下载全部课程论文
 ├── llm_client.py                 # 统一 LLM 客户端（OpenAI 兼容 + 确定性 mock）
