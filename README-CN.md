@@ -8,6 +8,8 @@
   <a href="README.md"><strong>English</strong></a>
   ·
   <a href="README-CN.md"><strong>中文文档</strong></a>
+  ·
+  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/"><strong>在线阅读</strong></a>
 </p>
 
 <p align="center">
