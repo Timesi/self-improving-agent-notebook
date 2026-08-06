@@ -40,7 +40,7 @@
 再写成短小代码；不依赖框架，也不把关键步骤藏在黑盒里。
 
 每本 notebook 遵循同一个学习契约：`直觉理解 → 手算验证 → 代码实现 → 实验观察`。
-默认使用确定性 mock，离线即可跑通；配置 OpenAI 兼容 API 后，同一套代码可切换到真实模型。
+依赖 LLM 的实验使用真实 OpenAI 兼容 API；本地运行前请配置 DeepSeek 或其他兼容端点。
 
 ## 课程路线
 
@@ -97,17 +97,7 @@ jupyter notebook notebooks/part1-foundation/01-course-overview.ipynb
 推荐环境：Python 3.10+、PyTorch 2.0+、NumPy、Matplotlib、Jupyter、16GB 内存。
 大多数 notebook 在 CPU 上即可运行。
 
-### Mock 模式（无需 API key）
-
-每一本 notebook 都保证所有依赖 LLM 的 cell 在确定性 mock 下正常工作：
-
-```bash
-export LLM_MOCK=1
-jupyter nbconvert --to notebook --execute \
-  notebooks/part1-foundation/02-test-time-compute.ipynb --output /tmp/out.ipynb
-```
-
-### 真实 LLM（可选）
+### 配置真实 LLM
 
 想看真实模型行为，把客户端指向任意 OpenAI 兼容端点：
 
@@ -117,7 +107,7 @@ export AGENT_LLM_API_KEY="sk-..."
 export AGENT_LLM_MODEL="deepseek-v4-flash"
 ```
 
-没有 key 时，`llm_client.py` 的 `get_llm()` 自动返回 mock，notebook 依旧完整执行。
+没有有效 key 时，客户端会直接报错；这能避免把占位输出误当成实验结果。
 
 ## 项目状态
 
@@ -128,7 +118,7 @@ export AGENT_LLM_MODEL="deepseek-v4-flash"
 | 论文 | 下载并精读 39 篇；`scripts/download_papers.py` 可复现下载 |
 | 讲解深度 | 每本补齐"直觉 + 具体例子 + 手算 + 为什么"，面向大一读者 |
 | 格式 | 全部通过 `nbformat.validate`，cell id 规范化 |
-| 执行 | mock 模式 17/17 零报错；真实 API 抽查通过 |
+| 执行 | 真实 API 抽查通过；完整执行需配置 API key |
 | 语言 | 中文 notebook，中英双语 README |
 
 ### 近期路线图
@@ -219,7 +209,7 @@ Self-Improving Agent Notebook
 - 核心算法至少包含一次具体的手算或 toy 示例。
 - 代码 cell 短小、可观察。
 - 随机实验使用固定种子。
-- 每个 notebook 自包含，mock 模式零报错运行。
+- 每个 notebook 自包含，LLM 实验明确依赖真实 API。
 - 讲解面向有耐心的初学者，代码保持贴近真实算法结构。
 
 ## 论文与系统
@@ -264,7 +254,7 @@ self-improving-agent-notebook/
 │   └── part4-frontiers/          # 12, 13, 15, 16, 17
 ├── papers/                       # 每讲研读笔记（NOTES.md）；论文 PDF 可复现
 ├── scripts/download_papers.py    # 从 arXiv 解析并下载全部课程论文
-├── llm_client.py                 # 统一 LLM 客户端（OpenAI 兼容 + 确定性 mock）
+├── llm_client.py                 # 统一 LLM 客户端（OpenAI 兼容）
 ├── web/                          # React/Vite 在线阅读器（部署到 GitHub Pages）
 ├── .claude/CLAUDE.md             # Notebook 写作规范
 ├── OUTLINE.md                    # 完整课程大纲
