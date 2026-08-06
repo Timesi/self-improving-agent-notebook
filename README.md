@@ -5,6 +5,12 @@
 </p>
 
 <p align="center">
+  <a href="README.md"><strong>English</strong></a>
+  ·
+  <a href="README-CN.md"><strong>中文文档</strong></a>
+</p>
+
+<p align="center">
   <a href="#overview">Overview</a> ·
   <a href="#what-you-will-build">What You Will Build</a> ·
   <a href="#why-this-project">Why</a> ·

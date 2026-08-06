@@ -1,0 +1,400 @@
+# Self-Improving Agent Notebook
+
+<p align="center">
+  <strong>用 17 篇可运行 Jupyter Notebook，从零构建 AI Agent 系统。</strong>
+</p>
+
+<p align="center">
+  <a href="README.md"><strong>English</strong></a>
+  ·
+  <a href="README-CN.md"><strong>中文文档</strong></a>
+</p>
+
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB">
+  <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C">
+  <img alt="Notebooks" src="https://img.shields.io/badge/Notebooks-17-orange">
+  <img alt="Language" src="https://img.shields.io/badge/Language-Chinese-2ea44f">
+  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20Mock-4b32c3">
+</p>
+
+<p align="center">
+  <a href="#项目概览">项目概览</a> ·
+  <a href="#你会亲手做出什么">你会做出什么</a> ·
+  <a href="#为什么做这个项目">为什么做这个项目</a> ·
+  <a href="#包含什么">包含什么</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#项目状态">项目状态</a> ·
+  <a href="#课程路线">课程路线</a> ·
+  <a href="#notebook-索引">Notebook 索引</a> ·
+  <a href="#质量标准">质量标准</a> ·
+  <a href="#论文与系统">论文与系统</a> ·
+  <a href="#贡献">贡献</a>
+</p>
+
+---
+
+<p align="center">
+  <strong>论文驱动的 Agent 学习：论文 -> 研读笔记 -> 可运行 notebook -> 实验观察。</strong>
+</p>
+
+<p align="center">
+  <em>每一讲都从指定的论文出发，用手算建立直觉，再从零实现这节课的核心 Agent 算法，
+  全程可在离线环境下运行。</em>
+</p>
+
+## 项目概览
+
+Self-Improving Agent Notebook 是一套以 Jupyter Notebook 为主线的 AI Agent 实践课。
+它不是把 Agent 当成黑盒调用，而是亲手实现背后的每一个组件：Agent 循环、Test-time Compute 缩放、
+验证器、工具使用与代码反馈、规划与树搜索、面向推理的强化学习、开放进化、搜索智能体、记忆、评测等。
+
+每个 Notebook 都遵循同一个学习契约：
+
+```text
+直觉理解 -> 手算验证 -> 代码实现 -> 实验观察
+```
+
+这个契约很重要。读者不应该只知道"重复采样能提高准确率"或"过程奖励模型比结果奖励模型难训练"，
+而应该能追踪中间数字，写出最小循环，并解释为什么会出现这种行为。
+
+这个项目的定位是**教学型参考实现**。它不是 Agent 框架，不是某个托管 Agent 产品的封装，
+也不是模型权重仓库。它的目标是让工程师真正看懂 Agent 内部发生了什么，并能从第一性原理
+解释关键设计。
+
+仓库内置一个统一的 LLM 客户端（`llm_client.py`）：配置了 key 时调用任意 OpenAI 兼容端点，
+没有 key 时回退到确定性 mock。这意味着每一本 notebook 都能离线完整运行，配置 API key 后
+又能看到真实模型的行为。
+
+## 你会亲手做出什么
+
+学完整条路线后，你会拥有一套"小而全"的现代 Agent 系统实现：
+
+| 阶段 | 你会实现 | 为什么重要 |
+|:---|:---|:---|
+| Agent 循环 | ReAct 式 Thought/Action/Observation 循环、动作解析器、工具注册表 | 看清一次 LLM 调用如何变成多步 Agent |
+| Test-time Compute | 重复采样、self-consistency、best-of-n、compute-optimal 缩放 | 理解推理期算力的收益到底来自哪里 |
+| 验证 | 结果验证器与过程验证器（ORM/PRM）、验证器训练 | 学会"生成"必须搭配可靠的"验证" |
+| 工具与代码反馈 | 工具调用、代码执行作为奖励、critique-revision 流程 | 让推理扎根于环境信号 |
+| 规划 | 任务分解、UCT 树搜索（LATS 风格）、规划与执行交错 | 看到 Agent 在动作空间而非 token 空间搜索 |
+| 推理训练 | STaR 自举、GRPO 的 advantage 与 loss | 把 RL 目标与 Agent 能力连起来 |
+| 进化与搜索 | Agent 设计搜索、代码采样-过滤-聚类 | 编程让 Agent 自我改进的元循环 |
+| 记忆 | 分层上下文管理、逐出策略、KV 缓存复用 | 处理比世界小的上下文窗口 |
+| 评测 | Agent 评测 Harness、胜率、时间视野拟合、裁判偏差 | 度量 Agent 到底能完成什么 |
+| 前沿方向 | CoT、证明搜索与验证器、VLA 动作 token、自治 | 把新论文拆成可运行的小实验 |
+
+```text
+LLM call -> agent loop -> tools -> verification -> planning -> RL -> memory -> evaluation
+```
+
+## 为什么做这个项目
+
+Agent 学习资料常见两个极端。
+
+一类资料很严谨，但进入门槛高：公式和论文名先出现，读者还不知道这个概念到底在解决什么问题。
+另一类资料很容易跑起来，但封装太重：关键过程藏在一个框架调用后面，读者很难建立真实的系统感。
+
+Self-Improving Agent Notebook 选择中间路线：把 Agent 当成一个可以拆解、测试、重建的系统。
+它不是要替代论文或 Agent 框架，而是帮你建立足够扎实的心智模型，让你之后读论文、用框架时
+更有判断力。
+
+这个项目适合你，如果你想：
+
+- 完整理解把一个语言模型变成 Agent 的整条循环。
+- 亲手实现 ReAct 循环、树搜索、验证器或 GRPO 更新，不把它们当黑盒。
+- 看懂推理期算力、验证器、训练期强化学习三者如何相互作用。
+- 明白记忆、评测、可靠执行为什么是系统问题，而不只是提示词问题。
+- 把验证器、Test-time Compute 缩放、Agentic RL 等新主题还原成可运行的小实验。
+
+## 包含什么
+
+| 领域 | 主题 | 参考实现 |
+|:---|:---|:---|
+| Agent 核心 | ReAct 循环、动作解析、工具注册表 | `AgentLoop`, `parse_actions`, `MiniWiki` |
+| Test-time Compute | 重复采样、self-consistency、best-of-n、覆盖率/准确率 | `pass@k` 无偏估计、多数投票、best-of-n |
+| 验证 | ORM/PRM、步级奖励、验证器训练 | `VerifierMLP`、步级解析判题器、PRM product/min |
+| 规划 | UCT 选择、价值回溯、任务分解 | `Node`/`UCT`、递归分解器、阶段号 |
+| 推理 RL | STaR 循环、GRPO advantage 与 loss、PPO vs GRPO | `grpo_loss`、组内 advantage、Clip-Higher |
+| 进化与搜索 | Meta-Agent 设计循环、采样-过滤-聚类 | `compile_agent`、行为签名、聚类 |
+| 记忆 | 分层上下文、逐出策略、KV 融合 | `ToyAgent` 记忆、FIFO/LRU/重要性、CacheBlend 式融合 |
+| 评测 | 评测 Harness、胜率、时间视野 logistic 拟合 | `run_eval`、win/tie/loss、`p = σ((log h − log t)·β)` |
+| 前沿方向 | CoT 模板、证明搜索 + 验证器、动作 token 化 | few-shot CoT、Horn 子句引擎、`discretize`/`detokenize` |
+
+## 这个项目不是什么
+
+为了让学习路径保持清晰，本仓库刻意避开几件事：
+
+- 它不是生产级 Agent 框架。
+- 它不是某个托管 Agent 产品或特定模型厂商的封装。
+- 它运行不需要 API key（mock 模式覆盖每一次 LLM 调用）。
+- 它不用 Agent 框架（LangChain、AutoGen 等）替代核心算法的从零实现。
+- 它不假设读者已经懂这些术语。
+
+文本中可能会提到 Agent 框架做对比，但教学路径始终保持每个核心算法显式可见。LLM 调用统一走
+一层很薄的 `llm_client.py`，没有别的。
+
+## 快速开始
+
+### Python notebooks
+
+```bash
+git clone https://github.com/walkinglabs/self-improving-agent-notebook.git
+cd self-improving-agent-notebook
+
+# 创建隔离的 Python 环境，而不是装进系统 Python
+python3 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m ipykernel install --user \
+  --name self-improving-agent \
+  --display-name "Python (self-improving-agent)"
+
+jupyter notebook notebooks/part1-foundation/01-course-overview.ipynb
+```
+
+如果提示 `jupyter: command not found`，说明虚拟环境没有激活，运行：
+
+```bash
+source .venv/bin/activate
+```
+
+或者直接用环境里的 Jupyter：
+
+```bash
+.venv/bin/jupyter notebook notebooks/part1-foundation/01-course-overview.ipynb
+```
+
+推荐环境：
+
+- Python 3.10+
+- PyTorch 2.0+
+- NumPy、Matplotlib、Jupyter
+- 16GB 内存
+
+大多数 notebook 在 CPU 上即可运行。强化学习演示用的是微型模型，很快跑完；
+更大规模的训练实验有 GPU 会更方便。
+
+### Mock 模式（无需 API key）
+
+每一本 notebook 都保证所有依赖 LLM 的 cell 在确定性 mock 下正常工作。强制 mock 模式：
+
+```bash
+export LLM_MOCK=1
+jupyter nbconvert --to notebook --execute \
+  notebooks/part1-foundation/02-test-time-compute.ipynb --output /tmp/out.ipynb
+```
+
+### 真实 LLM（可选）
+
+想看真实模型行为，把客户端指向任意 OpenAI 兼容端点：
+
+```bash
+export AGENT_LLM_BASE_URL="https://api.deepseek.com"
+export AGENT_LLM_API_KEY="sk-..."
+export AGENT_LLM_MODEL="deepseek-v4-flash"
+```
+
+没有 key 时，`llm_client.py` 里的 `get_llm()` 会自动返回 mock。所有 Agent 演示都对 mock 输出
+宽容，同一个 cell 在两种模式下都能运行。
+
+## 项目状态
+
+| 领域 | 状态 |
+|:---|:---|
+| Notebook | 完成 17/17，分布在 4 个 Part |
+| 研读笔记 | 17/17 讲，每讲一份 `papers/lecture-XX/NOTES.md` |
+| 论文 | 下载并精读 39 篇；`scripts/download_papers.py` 可复现下载 |
+| 格式 | 全部通过 `nbformat.validate`，metadata 已统一 |
+| 执行 | mock 模式 17/17 零报错执行；真实 API 抽查通过 |
+| 语言 | 中文 notebook，中英双语 README |
+
+### 近期路线图
+
+1. 打磨现有 notebook 的行文，让讲解从直觉到代码更自然。
+2. 扩大真实 API 验证范围，覆盖所有使用 LLM 客户端的 notebook。
+3. 增加 Agent 可靠性与可扩展监督（scalable oversight）的深度内容。
+4. 考虑补一份英文 notebook 镜像。
+
+## 课程路线
+
+课程按 4 个 Part、17 本自包含 notebook 组织。
+
+```text
+Self-Improving Agent Notebook
+│
+├── Part 1 · 基础与方法（Foundation）
+│   ├── 01 课程总览
+│   ├── 02 Test-time Compute 缩放
+│   ├── 03 鲁棒验证
+│   ├── 04 工具使用与代码反馈
+│   └── 05 多步推理与规划
+│
+├── Part 2 · 训练与进化（Training & Evolution）
+│   ├── 06 训练期缩放与强化学习
+│   ├── 07 自改进智能体的开放进化
+│   ├── 08 搜索与深度研究智能体
+│   └── 09 后训练演进：从 Chatbot 到 Agent
+│
+├── Part 3 · 智能体工程（Agent Engineering）
+│   ├── 13 软件工程智能体
+│   ├── 14 智能体记忆
+│   └── 17 Agent 评测与长程任务
+│
+└── Part 4 · 前沿（Frontiers）
+    ├── 15 LLM 推理
+    ├── 16 数学推理：AlphaProof 与 AlphaGeometry
+    ├── 18 构建自治智能体
+    ├── 19 多模态机器人智能体
+    └── 20 未来研究方向
+```
+
+每一本 notebook 都可以独立运行。你可以按顺序学，也可以直接跳到感兴趣的章节，
+不需要依赖前面 notebook 的运行时状态。（原始课程中的 L10-12 是中期展示，没有 notebook。）
+
+## Notebook 索引
+
+### Part 1 · 基础与方法
+
+| # | Notebook | 核心问题 | 实现重点 |
+|:---:|:---|:---|:---|
+| 01 | [课程总览](notebooks/part1-foundation/01-course-overview.ipynb) | 什么是 Agent，为什么它是 Chatbot 的下一步？ | Agent 循环骨架、动作解析器 |
+| 02 | [Test-time Compute 缩放](notebooks/part1-foundation/02-test-time-compute.ipynb) | 推理期多花算力为什么有用？ | pass@k、self-consistency、best-of-n、缩放曲线 |
+| 03 | [鲁棒验证](notebooks/part1-foundation/03-robust-verification.ipynb) | 如何检查模型生成出的答案？ | ORM vs PRM、验证器训练、步级奖励 |
+| 04 | [工具使用与代码反馈](notebooks/part1-foundation/04-tool-code-feedback.ipynb) | Agent 如何在环境中行动？ | ReAct 循环、工具注册表、执行奖励 |
+| 05 | [多步推理与规划](notebooks/part1-foundation/05-multi-step-planning.ipynb) | Agent 如何规划一步之外？ | 分解、UCT 树搜索、并行执行 |
+
+### Part 2 · 训练与进化
+
+| # | Notebook | 核心问题 | 实现重点 |
+|:---:|:---|:---|:---|
+| 06 | [训练期缩放与强化学习](notebooks/part2-training/06-train-time-scaling-rl.ipynb) | 如何把推理能力训练进模型？ | STaR 自举、GRPO advantage 与 loss |
+| 07 | [开放进化](notebooks/part2-training/07-open-ended-evolution.ipynb) | Agent 如何设计更好的 Agent？ | Meta-Agent 搜索循环、奖励黑客 |
+| 08 | [搜索与深度研究](notebooks/part2-training/08-search-deep-research.ipynb) | Agent 如何搜索程序与知识？ | 采样-过滤-聚类、检索注入 |
+| 09 | [后训练演进](notebooks/part2-training/09-post-training-evolution.ipynb) | 后训练如何从 Chatbot 演进到 Agent？ | SFT vs RLHF vs RLVR loss、信号来源 |
+
+### Part 3 · 智能体工程
+
+| # | Notebook | 核心问题 | 实现重点 |
+|:---:|:---|:---|:---|
+| 13 | [软件工程智能体](notebooks/part3-engineering/13-swe-agents.ipynb) | Agent 如何修复真实代码？ | 先测后改状态机、fast_p 指标 |
+| 14 | [智能体记忆](notebooks/part3-engineering/14-agent-memory.ipynb) | Agent 如何记住看到过的东西？ | 分层上下文、逐出、KV 复用 |
+| 17 | [Agent 评测](notebooks/part3-engineering/17-agent-evaluation.ipynb) | 如何度量长时程 Agent？ | 评测 Harness、胜率、时间视野拟合 |
+
+### Part 4 · 前沿
+
+| # | Notebook | 核心问题 | 实现重点 |
+|:---:|:---|:---|:---|
+| 15 | [LLM 推理](notebooks/part4-frontiers/15-llm-reasoning.ipynb) | 推理能力从哪里来？ | CoT 模板、self-consistency、涌现曲线 |
+| 16 | [数学推理](notebooks/part4-frontiers/16-alphaproof-math.ipynb) | 验证器 + 搜索如何证明定理？ | Horn 子句引擎、证明验证器、搜索循环 |
+| 18 | [自治系统](notebooks/part4-frontiers/18-autonomy-agents.ipynb) | 从演示到自治之间缺什么？ | 自检、恢复、置信度阈值接管 |
+| 19 | [多模态机器人](notebooks/part4-frontiers/19-multimodal-robotics.ipynb) | VLA 模型如何工作？ | 动作 token 化、词汇表屏蔽、mini VLA |
+| 20 | [未来研究方向](notebooks/part4-frontiers/20-future-research.ipynb) | 还有什么没解决？ | 开放问题地图、奖励黑客、多智能体协调 |
+
+## 质量标准
+
+为了让 notebook 真正可用作学习材料，本仓库遵循几条标准：
+
+- 概念先讲动机，再给记号。
+- 新术语先定义，再大量使用。
+- 核心算法至少包含一次具体的手算或 toy 示例。
+- 代码 cell 短小、可观察。
+- 随机实验使用固定种子。
+- 每个 notebook 自包含，mock 模式零报错运行。
+- Markdown 讲解面向有耐心的初学者，代码保持贴近真实算法结构。
+
+## 论文与系统
+
+本课程把实现细节与有影响力的论文和系统连接起来：
+
+| 论文或系统 | 覆盖的概念 |
+|:---|:---|
+| Large Language Monkeys / Snell et al. | 重复采样、compute-optimal 测试期缩放 |
+| Cobbe 验证器 / Lightman / Math-Shepherd | 结果奖励模型 vs 过程奖励模型 |
+| ReAct / RLEF / Constitutional AI | 工具使用、执行反馈、AI 反馈 |
+| LATS / ADaPT / SPRINT | 树搜索、按需分解、并行执行 |
+| STaR / DeepSeekMath-GRPO / DAPO | 推理自举、组内相对 RL |
+| ADAS / AI Scientist / AlphaEvolve | 自动化 Agent 设计、开放进化 |
+| AlphaCode / Search-o1 | 程序采样-过滤-聚类、Agentic 检索 |
+| MemGPT / Cartridges / CacheBlend | 分层记忆、可学习压缩、KV 复用 |
+| CodeMonkeys / KernelBench | 软件工程中的测试期算力 |
+| METR / GDPval / DeepScholar-Bench | 长时程与经济价值评测 |
+| CoT / Self-Consistency / Emergent Abilities | 推理链、采样并边缘化 |
+| AlphaGeometry / AlphaProof | 神经-符号证明、形式化 + RL |
+| RT-2 / OpenVLA | 视觉-语言-动作模型 |
+
+## 课程来源
+
+课程大纲复刻自 Stanford 的 [CS329A: AI Agents](https://cs329a.stanford.edu/)（Autumn 2025）。
+原课程页只列出每讲的论文、不展开内容。本仓库下载并精读这些论文，为每一讲写一份研读笔记
+（`papers/lecture-XX/NOTES.md`），再把每一讲做成一本可运行的 notebook，还原讲师会怎么教这节课。
+
+没有指定论文的嘉宾讲座（后训练演进、LLM 推理、AlphaProof、自治、机器人等），按嘉宾的
+研究方向与相关论文补全内容。研读笔记见 [papers/](papers/)，用
+`scripts/download_papers.py` 可复现论文下载。教学契约与仓库风格参考
+[Modern LLM Notebook](https://github.com/walkinglabs/modern-llm-notebook)。
+
+## 仓库结构
+
+```text
+self-improving-agent-notebook/
+├── notebooks/                    # 中文 notebook（17 本）
+│   ├── part1-foundation/         # 01-05
+│   ├── part2-training/           # 06-09
+│   ├── part3-engineering/        # 13, 14, 17
+│   └── part4-frontiers/          # 15, 16, 18, 19, 20
+├── papers/                       # 每讲研读笔记（NOTES.md）；论文 PDF 可复现
+│   ├── lecture-01/ ... lecture-20/
+│   └── NOTES_TEMPLATE.md
+├── scripts/
+│   └── download_papers.py        # 从 arXiv 解析并下载全部课程论文
+├── llm_client.py                 # 统一 LLM 客户端（OpenAI 兼容 + 确定性 mock）
+├── .claude/CLAUDE.md             # Notebook 写作规范
+├── OUTLINE.md                    # 完整课程大纲
+├── CLAUDE.md
+├── requirements.txt
+└── README.md / README-CN.md
+```
+
+## 贡献
+
+欢迎能提升清晰度、正确性或覆盖面的贡献。
+
+好的贡献包括：
+
+- 修正错误讲解、坏掉的 cell 或过时的 API。
+- 改进手算部分和可视化。
+- 增加带断言的小练习。
+- 为重要的 Agent 主题提议新 notebook。
+- 帮助在真实 LLM 端点上验证 notebook。
+
+## 引用
+
+如果 Self-Improving Agent Notebook 对你的研究或工作有帮助，请引用：
+
+```bibtex
+@misc{self-improving-agent-notebook,
+  title   = {Self-Improving Agent Notebook: Build AI Agents from Scratch},
+  author  = {WalkingLabs},
+  year    = {2026},
+  url     = {https://github.com/walkinglabs/self-improving-agent-notebook},
+  note    = {GitHub repository, accessed 2026}
+}
+```
+
+## 许可证
+
+许可证待定。项目遵循
+[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+的精神，与参考项目 Modern LLM Notebook 一致。
+
+---
+
+<p align="center">
+  <sub>
+    为想从内部理解 Agent 系统的工程师而建。
+    <br>
+    由 <a href="https://github.com/walkinglabs">walkinglabs</a> 维护。
+  </sub>
+</p>
