@@ -21,8 +21,8 @@
 </p>
 
 <p align="center">
-  <a href="#this-is-a-course">This Is a Course</a> ·
-  <a href="#learning-path">Learning Path</a> ·
+  <a href="#why-this-course">Why</a> ·
+  <a href="#curriculum">Curriculum</a> ·
   <a href="#what-you-will-build">What You Will Build</a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="#project-status">Status</a> ·
@@ -34,120 +34,59 @@
 
 ---
 
-## This Is a Course
+## Why This Course
 
-Self-Improving Agent Notebook is a hands-on course on AI agents. It is not a framework tutorial —
-every lecture starts from the assigned papers and rebuilds the core agent algorithm by hand.
+In 17 notebooks you build, **from scratch**, every core algorithm behind modern AI agents — and you trace each one
+by hand before writing any code. No frameworks, no black boxes. By the end you can open any agent paper and know
+exactly which piece of the system it changes.
 
-One sentence captures the whole arc:
+You will have personally implemented:
 
-> **A single LLM call can only "talk", not "do". We turn it, step by step, into an agent that can
-> think, act, verify, be trained, and eventually improve itself.**
+- **An agent loop** — the model emits *thought + action*, a tool executes it, the result feeds back, until the task is done
+- **A verifier** — a small model trained to grade answers, at both the outcome level (final answer) and the process level (every step)
+- **A ReAct agent** wired to real tools (search, calculator) — watch it reason *while* it acts
+- **A tree-search planner** that keeps many candidate paths and backs up rewards (UCT, hand-calculated)
+- **A GRPO update** — the group-relative RL rule behind reasoning models, derived step by step
+- **An evolution loop** where an agent designs better agents — plus the reward-hacking trap it falls into
+- **A memory system** with hierarchical context and KV-cache reuse
+- **An eval harness** that fits a capability curve to "how long a task takes a human vs an agent"
 
-Every notebook follows the same learning contract:
+Every notebook follows one contract — `intuition -> hand calculation -> implementation -> experiment` — and runs
+offline with a deterministic mock LLM. Add an API key and the same cells light up with real models.
 
-```text
-intuition -> hand calculation -> implementation -> experiment
-```
+## Curriculum
 
-You will not just run code. You will trace the numbers, implement the algorithm yourself, and explain
-why the behavior appears.
+The 17 lectures form one progressive path: each adds one ability and picks up the question the previous one left.
 
-## Learning Path
+| # | Lecture | After this you can... |
+|:--:|:--|:--|
+| 01 | Course Overview | explain what an agent is, and run the minimal loop |
+| 02 | Test-time Compute | boost accuracy by sampling many times and voting |
+| 03 | Robust Verification | train a verifier to tell good answers from bad |
+| 04 | Tool & Code Feedback | build a ReAct agent that calls real tools |
+| 05 | Multi-step Planning | search a tree of actions instead of guessing one step |
+| 06 | Train-time RL | hand-calculate a GRPO update that bakes reasoning into the model |
+| 07 | Open-ended Evolution | let an agent improve an agent — and spot reward hacking |
+| 08 | Search & Deep Research | run sample-filter-cluster at AlphaCode scale |
+| 09 | Post-training Evolution | trace one model's whole life from chatbot to agent |
+| 13 | SWE Agents | make an agent fix real code, iteratively |
+| 14 | Agent Memory | give an agent memory that outlives the context window |
+| 17 | Agent Evaluation | measure what an agent can actually finish |
+| 15 | LLM Reasoning | explain why CoT works and when "emergence" is real |
+| 16 | Math Proof | combine a neural proposer with a symbolic verifier |
+| 18 | Autonomy | detect errors, recover, and decide when to hand off to a human |
+| 19 | Robotics (VLA) | turn continuous robot actions into tokens a model can emit |
+| 20 | Future Research | name the open problems and where you could start |
 
-The course is ordered by how hard each idea is to grasp, and every step builds on the one before it.
-**At the end of each step you can do something you could not do before.** You are welcome to jump
-around, but read in order and each notebook picks up the question the previous one left open.
+### How the pieces connect
 
-### Step 1 · What one call can and cannot do (L1)
+Not 17 isolated topics — ideas get handed off:
 
-Before writing any code, look at the four hard limits of a plain LLM app: it can only "talk" not
-"do"; its context window is finite; it cannot correct its own mistakes; its knowledge stops at the
-training cutoff. This lecture builds the **first minimal agent loop** — the skeleton the whole course
-returns to.
-
-### Step 2 · Does spending more inference compute help? (L2)
-
-The model is not good enough, but training is expensive. Different approach: **ask the same question
-several times, then vote.** This lecture implements repeated sampling, self-consistency, and best-of-n,
-and hand-calculates the "more samples, better coverage" curve. The key lesson — **generating is the
-easy half; picking the good answers is the hard part** — leads directly to the next step.
-
-### Step 3 · Who picks? Let the machine check the machine (L3)
-
-Picking cannot rely on guessing. This lecture trains a **verifier**: an outcome reward model (ORM)
-scores only the final answer; a process reward model (PRM) checks every step. You will see the same
-wrong answer scored very differently by the two. Takeaway: **generation + verification is a pair**,
-and verifiers keep returning throughout the course.
-
-### Step 4 · Let the agent act: tools and environment (L4)
-
-Thinking without acting is meaningless. This lecture implements the **ReAct loop**: the model emits
-"thought + action" each round, the action runs in a tool, and the observation is fed back. You will
-wire up search, calculator, and other tools and watch the agent "think while doing".
-
-### Step 5 · Let the agent plan: beyond one step (L5)
-
-What if a task is too long for one step? This lecture is about **planning**: splitting the task into
-subgoals (ADaPT), doing tree search over actions (LATS-style UCT), and packing parallelizable steps
-(SPRINT). You will see that "keep several candidate paths" beats "greedily take one step" — the same
-idea as the voting in Step 2.
-
-### Step 6 · Train the ability into the model: reinforcement learning (L6)
-
-Inference-time compute is expensive. Can we **put the reasoning ability into the model**? This lecture
-implements STaR bootstrapping (the model keeps learning from problems it solved) and GRPO
-(group-relative RL). You will hand-calculate the advantage of a batch of samples and see why we
-subtract the mean and divide by the standard deviation. **The verifier from Step 3 becomes the reward
-signal for training.**
-
-### Step 7 · Let the agent improve the agent: open-ended evolution (L7)
-
-If agents can be improved, why can't the improver be an agent too? This lecture implements an
-**evolution loop**: a "design agent" writes agent code, scores it on a task, stores it, and improves
-in the next round. It also exposes a dangerous failure mode — **reward hacking**: an agent learns to
-"game the score" instead of "doing the job".
-
-### Step 8 · Let the agent search and do research itself (L8)
-
-Amplify the "sample more" idea from Step 2 by ten thousand and you get program synthesis and deep
-research. This lecture implements the **sample-filter-cluster** pipeline (AlphaCode), on-demand
-retrieval in reasoning (Search-o1), and a mini deep-research workflow.
-
-### Step 9 · The whole picture: one model's life from chatbot to agent (L9)
-
-Tie the first eight steps together with the evolution of **post-training**: SFT (imitate
-demonstrations) → RLHF (learn preferences) → RLVR (learn verifiable correctness) → agentic training
-(learn from environment feedback). The through-line is the **migration of the reward signal**.
-
-### Step 10 · Engineering: make it actually useful (L13 / L14 / L17)
-
-So far we built *abilities*; now we build *delivery*: make agents **fix code** (software-engineering
-agents), **remember** (memory systems), and **be judged fairly** (evaluation harnesses and
-long-horizon tasks). Evaluation introduces the time horizon — how long a task takes a human versus an
-agent, and how the capability curve is fitted.
-
-### Step 11 · Frontiers: where the boundary is (L15 / L16 / L18-L20)
-
-Finally, walk to the frontier of agents: **the limits of reasoning** (CoT and self-consistency),
-**mathematical proof** (the neuro-symbolic blend of AlphaGeometry and AlphaProof), **autonomy and
-oversight**, **robotics** (vision-language-action models), and the **open problems** that are not
-solved yet.
-
-### A relay of ideas
-
-The lectures are not just a list — many concepts are handed off from one lecture to the next:
-
-```text
-L2 voting  → L3 verifiers pick for you → L5 tree search scores nodes the same way
-L3 verifiers → L6 GRPO uses them as training reward → L7 evolution uses them as fitness
-L2 more sampling → L8 AlphaCode scales it to millions of candidates
-L4 ReAct loop → L5 embedded in a search tree → L13 called repeatedly on code tasks
-L7 reward hacking → L17 evaluation guards against it → L20 Goodhart's law
-```
-
-Read in order and each notebook catches the question the last one left; jump around and the relay
-diagram still tells you where you are.
+- **voting → verification → search** (L2 → L3 → L5): the score you vote with becomes the verifier that picks nodes in tree search
+- **verification → RL reward → fitness** (L3 → L6 → L7): the same verifier becomes the training signal, then the fitness in evolution
+- **sampling → search at scale** (L2 → L8): "ask many times" scaled to millions of candidates is AlphaCode
+- **the loop → embedded in a tree → called on code** (L4 → L5 → L13): one ReAct loop, three settings
+- **reward hacking → what eval guards against → Goodhart** (L7 → L17 → L20)
 
 ## What You Will Build
 
@@ -231,7 +170,7 @@ Without a key, `get_llm()` in `llm_client.py` returns the mock automatically.
 3. Add deeper material on reliability and scalable oversight.
 4. Consider an English mirror of the notebooks.
 
-## Curriculum
+## Curriculum Map
 
 ```text
 Self-Improving Agent Notebook
