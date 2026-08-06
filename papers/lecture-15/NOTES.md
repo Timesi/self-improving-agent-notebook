@@ -1,102 +1,107 @@
-# Lecture 15 — LLM 推理（LLM Reasoning）研读笔记
+# Lecture 15 — 构建自治智能体系统：经验与开放问题 研读笔记
 
-> 本文件是 CS329A 第 15 讲的论文研读笔记，是编写对应 notebook 的素材。
-> 嘉宾：Denny Zhou（Google DeepMind，三篇论文的共同作者）。
+> 本文件是 CS329A 第 15 讲的研读笔记，是编写对应 notebook 的素材。
 > 来源：https://cs329a.stanford.edu/（Autumn 2025 课程大纲）
+>
+> 本讲为嘉宾讲座：Misha Laskin（Reflection AI 联合创始人兼 CEO），标题 "Building Agentic Systems for Autonomy: Lessons & Open questions"，无指定论文。
+> 因此本笔记将模板中的「论文精读」改为「主题精读」，按四个主题（可靠性三层 / 监督粒度 / trust 边界 / scalable oversight）组织，并补充嘉宾背景。
 
 ## 课程主题
 
-这一讲要回答的核心问题：**LLM 的"推理能力"从哪里来？如何在不改模型、不微调的前提下把它激发出来？**
+这一讲要解决的核心问题：**从"能做演示"到"能自治"之间，到底缺什么？** 前面的讲座分别教了验证器（L3）、工具与代码反馈（L4-5）、RL 缩放（L6-9）、记忆（L11）、评测（L14），每一环都能在 demo 上跑通。但把它们拼成一个能在无人看管下运行几小时、几天的系统时，可靠性、错误恢复、监督与信任、长时程自主、安全这些横切问题就会冒出来。这一讲是 Part 4 Frontiers 里少有的"嘉宾经验谈"，把前 17 讲的能力件拼装成一个整体，直面"自治"这个词背后的工程与科学空白。
 
-三篇论文给出了一条自洽的答案链：
-1. **能力存在**：大模型在足够规模下会"涌现"出小模型没有的推理能力（emergent abilities）。
-2. **能力可激发**：靠 few-shot 提示格式的极小改动（把 exemplar 从 ⟨问题,答案⟩ 换成 ⟨问题,推理步骤,答案⟩），就能用提示词把这种能力"钩"出来（chain-of-thought prompting）。
-3. **能力可聚合**：单次贪婪解码只走一条推理路径，容易局部最优；改为"多次采样 + 对最终答案多数投票"，用"自我集成"（self-consistency）进一步提升，还顺带得到不确定性估计。
+为什么安排在这个位置：L12（推理）、L13（数学）展示了模型单次能力的上限，L14（评测）刚讲了长时程任务怎么测；本讲紧接着把镜头从"模型"拉到"系统"——一个 agent 是模型 + 记忆 + 工具 + 监督 + 恢复机制的集合体，模型不是瓶颈，周围那圈 harness 才是。它也是 L16（机器人）"把 agent 放进真实世界"与 L17（未来）的前奏：机器人本质上是最严苛的自治需求方。
 
-为什么放在 Agent 课程的这个位置：Agent 的一切都建立在模型的能力上——多步任务分解、推理中间步骤生成、对自己答案的置信度判断（"know when it doesn't know"）。这一讲是在为后面的 Agent 构建（planning、tool use、反思、自校正）打下"推理引擎"的理论与直觉基础。三篇论文的主角（Denny Zhou）也把推理与程序合成、Least-to-most、思维树（ToT）等后续工作直接串起来。
+教学中本讲回答四个递进的问题：让 agent 自己跑得更久，最难的是单步做对、循环跑稳、还是出错后能爬起来（可靠性三层）→ 要给 agent 什么样的反馈信号，看结果、看过程、还是让它自己迭代（监督粒度）→ 我们凭什么把有后果的动作委托给它（trust 边界）→ 当模型强到人没法逐条把关时怎么办（scalable oversight 与 AI control）。
 
-## 论文精读
+## 主题精读
 
-### 论文 1：Chain-of-Thought Prompting Elicits Reasoning in Large Language Models（arxiv:2201.11903，cot.pdf）
-- **核心思想**：给大模型 few-shot 的 exemplar 时，把"输入→输出"对改成"输入→**中间推理步骤**（chain of thought）→输出"三元组，模型就能解决它原来解不出的多步推理任务。核心观点有三层：(1) 中间步骤让模型把多步问题分解，把"计算"分配到更难的题上；(2) 推理步骤提供了可解释窗口，便于排查错在哪一步；(3) **这是提示格式的功劳而非训练**——全程没有微调任何模型。论文自称"标准 prompting 只是模型能力的下界"。
-- **关键公式/算法**：核心是提示格式，无训练目标。格式为 `Q: <题目>\nA: <分步推理…>。The answer is <答案>.`；用贪婪解码。算术任务共用 8 条手工写的 CoT exemplar（AQuA 因为是选择题用 4 条）；常识任务每条 4–7 条；符号任务每条手工示范。评估 5 个模型族：GPT-3（text-ada/babbage/curie/davinci-002 ≈ 350M/1.3B/6.7B/175B）、LaMDA（0.4B–137B）、PaLM（8B/62B/540B）、UL2-20B、Codex。三类基准：算术（GSM8K、SVAMP、ASDiv、AQuA、MAWPS）、常识（CSQA、StrategyQA、Date/Sports Understanding、SayCan）、符号（last letter concatenation、coin flip）。
-- **关键实验结论**：
-  - **GSM8K 显著提升**：PaLM 540B + 8 条 CoT exemplar 达到 57% 解题率，远超标准 prompting（18%）与微调 GPT-3 175B + verifier（33%），刷新当时 SOTA（图 2：33 / 55 / 18 / 57）。
-  - **CoT 是规模上的涌现能力**：小模型（<~100B）不仅没收益，还常产生"流畅但不合逻辑"的推理链，性能反而低于标准 prompting；到 ~100B 才出现明显增益。越难的题增益越大（GSM8K 上性能翻倍以上；单步题 SingleOp 无增益）。
-  - **消融隔离出"自然语言中间步骤"是关键**：只给方程（equation only）、只给一串点模拟"可变计算量"（variable compute）、把推理步骤放在答案之后（reasoning after answer），三者都与基线持平 → 增益来自"作为顺序推理的自然语言步骤"，不是方程、不是算力、不是知识激活。
-  - **鲁棒性**：不同标注者（A/B/C）、不同 exemplar 集（含 GSM8K 训练集抽样）、不同顺序、不同数量，CoT 始终大幅优于基线（虽然 prompt 工程仍会引入方差，如 coin flip 从 99.6% 到 71.4%）。
-  - **符号推理 + 长度外推（OOD）**：PaLM 540B 在 in-domain 接近 100%；标准 prompting 在更长序列上完全失败，而 CoT 让长度泛化（2 词名字→4 词、2 次翻币→4 次）成为可能。
-  - **错误分析**：50 个正确样本中 48 个推理链逻辑正确；50 个错误样本中 46% 是"几乎正确"（计算器/符号映射/漏一步），54% 是语义理解或连贯性问题；把 PaLM 从 62B 扩到 540B 主要修好了"漏一步"（18 个修好 12 个）和语义理解错误（20 个修好 6 个）。
-- **与课程主题的关系**：这一篇是整个第 15 讲的锚点——证明"推理可以被提示激发、且只在足够大模型上被激发"，把"涌现"与"提示"两个概念焊在一起。也是后文 self-consistency 的直接基础（论文自己也提到多数投票是改进方向）。
-- **可演示的代码点**：手写标准 vs CoT 两组 few-shot 模板并对比输出；实现 "The answer is X." 的答案解析；复现三种消融（equation only / dots / answer-first）；用规则或小模型复现 last-letter 与 coin flip 玩具任务及 OOD 长度外推。
+### 主题 1：可靠性三层——单步正确 / 循环稳定 / 长程纠错
 
-### 论文 2：Self-Consistency Improves Chain of Thought Reasoning（arxiv:2203.11171，self-consistency.pdf）
-- **核心思想**：CoT 的贪婪解码只走一条路径，容易掉进局部最优或单步错误。自洽性把解码换成"**sample-and-marginalize**"：先采样出一组**多样的推理路径**，再对它们各自的最终答案做**多数投票**。直觉：复杂的推理题通常存在多条通向唯一正确答案的路径；正确的路径即使多样也会在最终答案上"汇合"，而错误的路径很少巧合到给出同一个答案。这类似人的经验——多种思路得到同一个答案时信心更足。方法完全无监督、无需 verifier / reranker / 微调，是单模型上的"self-ensemble"。
-- **关键公式/算法**：三步骤：(1) CoT 提示；(2) 从解码器采样 m 条路径（temperature + top-k）；(3) 对最终答案集合取 argmax 多数投票 `argmax_a Σ_{i=1..m} 𝟙(a_i = a)`。可选加权：用长度归一化的条件对数概率 `P(r_i,a_i|prompt,q) = exp((1/K)·Σ_k log P(t_k | …))`。**关键发现：无加权多数投票 ≈ 归一化加权求和（74.4 vs 74.1），且明显优于未归一化加权**——因为模型各条路径的概率差不多（模型校准差），因此简单多数投票就够了。采样配置：UL2/LaMDA T=0.5、top-k=40；PaLM T=0.7、top-k=40；GPT-3 T=0.7 无 top-k；默认采样 40 条、10 次取均值。
-- **关键实验结论**：
-  - **普遍大增益**：PaLM-540B 上 GSM8K 56.5→74.4（**+17.9%**）、SVAMP +7.6%、AQuA +12.5%、StrategyQA 75.3→81.6（+6.4%）、ARC-c 85.2→88.7（+3.9%）。摘要口径：GSM8K +17.9%、SVAMP +11.0%、AQuA +12.2%、StrategyQA +6.4%、ARC-c +3.9%。
-  - **增益随规模增大**：UL2-20B 只 +3–6%，LaMDA-137B 与 GPT-3 达 +9–23%；对已很强的模型仍显著（AQuA/GSM8K +12–18%）。在几乎所有任务上超越有监督 SOTA，且完全无监督。
-  - **优于其他解码/集成方法**：同样样本数下显著优于 sample-and-rank；优于 beam search（beam 多样性低，反而更差）；优于 prompt 打乱集成（40 次置换 19.2、3 套 prompt 18.6 vs self-consistency 27.7，LaMDA GSM8K）；多模型集成不如单模型自洽（PaLM 540B self-consistency 74.4 vs 模型集成最高 36.9）。
-  - **鲁棒且通用**：对采样策略/超参（T、top-k、nucleus p）稳健；能修复不完美提示（17.1→14.9，+SC→23.4）、方程提示、以及 zero-shot CoT（PaLM 零样本 43.0→69.2，+26.2%）；在 CoT 有害的普通 NLP 任务上也能反超标准 prompting。
-  - **一致性即不确定性**：样本间一致性（最大票占比）与正确率高度相关 → 可以当"知道自己不知道"的置信度信号（图 5）。
-  - **路径数-精度饱和曲线**：路径越多越好但很快饱和，实践中 5–10 条即可拿到大部分收益。
-- **与课程主题的关系**：CoT 的直接续作（同为 Denny Zhou 工作），把"推理"从一次性输出推进到"多路径决策 + 聚合"，并顺手给了 Agent 需要的**不确定性估计**与校准视角。它示范了"不需要更多数据/训练，只用解码侧小改动"就能放大推理能力——这是提示/解码技巧这类"推理工程"的典范。
-- **可演示的代码点**：numpy 实现多数投票与编辑距离（对自由文本答案）自洽聚合；复现 Table 1 四种聚合策略对比；模拟"错误路径不汇合"的玩具概率模型；画"路径数 vs 精度"饱和曲线；画"一致性 vs 正确率"图复现不确定性信号。
+- **核心思想**：Laskin 的观察是"验证/奖励是整个 AI 里最根本的瓶颈"（他把 reward verification 称为 the single most fundamental bottleneck across AI）。可靠性不是一个性质，而是三个互相独立的层次，每层失败模式不同、解法不同。
+- **第一层：单步正确（single-step correctness）**。单次 LLM 调用给出正确答案的概率。这一层 L3 的验证器就是为它服务的：自回归生成不能回头，多步推理里一个中间错就毁掉整条解，因此要采样多条 + 验证器挑选（best-of-N）。这里的上限是"验证器判对率"，也就是生成-验证差距（L3 Weaver 一讲：即使 Pass@K 高，选不出来就白搭）。教训：单步正确率是自治的乘法因子，不是加法——两步都 90% 就只剩 81%。
+- **第二层：循环稳定（loop stability）**。agent 是一个循环：感知→决策→执行→观察。循环里的错误会**复合（compounding）**：状态越滚越偏，后面每一步都在修正前面的偏差甚至放大它。HORIZON 基准（arXiv:2604.11978，4 领域 3100+ 轨迹）发现 agent 在短/中时程任务上接近最优，到高时程突然非线性崩塌，且失败分类里 72.5% 属于过程级错误（规划、环境、指令、历史错误累积），而不是"模型不懂"。"history error accumulation"与"catastrophic forgetting"说明循环里**状态维护本身**就是失败来源。这里的解法靠 harness：显式状态、检查点、幂等动作、把中间产物落盘。
+- **第三层：长程纠错（error recovery）**。出错不可避免，关键是能不能检测到并爬起来。PlanBench-XL（arXiv:2606.22388）给工具注入"阻塞"（缺失、失败、误导），GPT-5.4 从无阻塞 51.9% 崩到最严阻塞 11.4%，且"失败没有显式错误信号"或"恢复需要更长的替代路径"时最脆弱。EPAM 的生产经验总结为"agent 通常能做完容易的 95%，卡在难啃的 5%"，而 Anthropic 的 C 编译器实验能成功正是因为环境自带强反馈环（成熟规格、已知正确测试、几十年先例、明确的验证机制）。教训：**可靠的自治不是靠更聪明的模型，而是靠更强的反馈环**。
+- **与课程主题的关系**：三层把"自治"拆成可工程化的三个目标，也解释了本讲为什么放在课程末尾——每一层都要复用前面的能力（验证器、工具执行、记忆、评测），再叠加系统级设计。
+- **可演示的代码点**：构造一个多步任务循环，逐步注入错误，对比"单步正确率"与"整任务成功率"随步数的乘法塌缩；演示循环里状态偏差的复合。
 
-### 论文 3：Emergent Abilities of Large Language Models（arxiv:2206.07682，emergent-abilities.pdf）
-- **核心思想**：这是一篇综述/概念论文（Jason Wei 等，Denny Zhou 参与），把"涌现能力"形式化：**某个能力如果小模型没有、大模型才有，且无法靠外推小模型性能预测出来，就是涌现的**。定义根植于 Philip Anderson 1972 年 "More Is Different"：系统里的**量的变化**导致**质的行为变化**。画成 scaling curve（x 轴训练 FLOPs），涌现表现为：性能在小规模段贴近随机（flat），到达某个临界规模后**跳**到明显高于随机——一种"相变"形态。论文强调涌现是"许多相关变量的函数"（算力、参数量、数据、甚至 WikiText103 困惑度），临界规模不是能力的内在属性，会随数据质量、架构、训练方法变化。
-- **关键公式/算法**：无方法，主要是**分类学 + 证据汇总**。两类涌现场景：(a) few-shot prompting 能力本身（图 2 的 8 个例子）；(b) **增强型提示/微调技巧只有在大模型上才有效**（图 3）——如果一个技巧在小模型上无效甚至有害、到足够规模才开始生效，也视为涌现能力。给出的机制直觉：多步推理需要 O(l) 层深度的顺序计算；闭卷 QA 需要足够参数"压缩知识库"。
-- **关键实验结论**：
-  - 涌现的 few-shot 任务（图 2）：模算术（GPT-3 于 2×10²² FLOPs/13B、LaMDA 于 10²³/68B 跳出随机）、IPA 转写、字母重排、波斯语 QA、TruthfulQA（Gopher 280B/5×10²³ FLOPs 跳到高于随机 20%+）、grounded mappings、MMLU（≤~10B 全部接近随机，70B–280B 才显著超过随机）、WiC。
-  - 涌现的增强技巧（图 3 + 表 1）：**CoT 于 ~10²³ FLOPs（~100B）**；指令微调 FLAN 于 68B；**scratchpad（8 位加法）仅需 40M 参数/8.9×10¹⁹ FLOPs 就涌现**（阈值可以很低）；P(True) 校准于 52B。表 1 明确把 **self-consistency 也列为涌现技巧**（1.3×10²³ FLOPs / 68B LaMDA），形成三篇论文的闭环。
-  - **历史案例 WiC**：GPT-3/Chinchilla 到最大规模仍不高于随机，Brown et al. 曾归咎于架构/自回归目标；结果 PaLM 540B（2.5×10²⁴ FLOPs）靠继续 scaling 就突破——说明"负结果"也可能只是规模没到。
-  - **涌现 ≠ 只有规模**：Sanh 等人用 encoder-decoder T0 在 11B 上实现了指令跟随；InstructGPT 用 RLHF 让 1.3B 胜过更大模型；PaLM 62B 能在 14 个 LaMDA/GPT-3 到最大都接近随机的 BIG-Bench 任务上超随机（数据质量与架构也起作用）。**能力可先在小模型上出现，再随训练方法进步被"解锁"到更小规模**。
-  - **度量视角的自我批判（§5.1）**：exact match / 只判最终答案对错会掩盖递增的局部改进，可能把平滑进步伪装成涌现；但用交叉熵损失分析六个涌现任务，发现小规模时 CE 确实在稳步下降（Outcome 2），且分类任务也涌现、换 BLEU/ROUGE 等部分评分指标依然有涌现形态 → 度量只能部分解释，不能完全归因于度量。
-  - **BIG-Bench 关键词分析**：涌现占比最高的是类比推理、词义消歧、真实性、社会推理、情绪理解；数学/算术占比反而低；视觉、非语言、context-length 类多为 flat 曲线。没有清晰的"哪些任务会涌现"规律。
-- **与课程主题的关系**：给整讲提供了概念伞：CoT 论文的"CoT 是规模涌现"、self-consistency 论文的"自洽解码也是涌现技巧"都挂在它上面。同时它引入了**能力 vs 度量**的诚实反思，是教学上"批判性转向"的关键文本。可与 Yi et al. (2204.07646，"涌现是大模型的幻觉吗？") 对比：Yi 等人用逐 token 精度、Brier score、部分评分等连续/平滑度量重画同一批曲线，发现曲线变平滑可预测，认为"涌现"主要是**不连续度量（exact match、acc）造成的假象**；本论文则用 CE 分析与分类任务上的涌现反驳"纯粹是度量"。两边本质分歧在于：底层能力是平滑增强的（Yi 方）还是存在真正的质变门槛（Wei 方）。
-- **可演示的代码点**：可视化"度量制造涌现"——对一条平滑的底层能力曲线分别用 exact match 与逐 token 精度度量；多步任务上把平滑的单步正确率 p 变形成最终准确率 p^L 的 compounding 曲线，展示跳变；用合成数据复现 Yi et al. 的核心论点。
+### 主题 2：监督的粒度——outcome / process / iterated
 
-## 教学主线（想象 Stanford 老师会怎么教）
+- **核心思想**：给 agent 的反馈信号有三种粗细粒度，成本与鲁棒性递增，对应 L3 的验证器谱系，再向上一步就是"让模型监督自己"。
+- **outcome 监督**：只看最终结果对错（Cobbe 的 ORM / 结果验证器）。便宜、可自动标注，但信用分配差——长任务里错在哪一步要自己猜。对短任务够用，对长任务信息量急剧下降。
+- **process 监督**：对每一步给反馈（Lightman 的 PRM，只标到第一个错误步）。更可解释、更安全（负 alignment tax），但需要步级标注（可以像 Math-Shepherd 那样用 completer 自动生成）。
+- **iterated 监督**：让模型自己生成反馈并改（iterative self-refinement），把"监督"从"训练时的一次性标签"变成"运行时循环"。两个关键实例：
+  - **Self-Refine**（Madaan et al., arXiv:2303.17651）：同一个 LLM 同时当生成器、反馈器、精化器，生成→找错→改，无监督数据，平均约 20% 绝对提升。但最刺眼的负结果：在数学推理上几乎不涨（0–0.2%），因为模型的自验证太弱——ChatGPT 对 94% 的样本都说"看起来都对"；一旦用外部信号指明错了，收益立刻超过 5%。结论：**自证自觉有天花板，必须接一个"硬"验证信号**。
+  - **Reflection-Tuning**（Reflection 70B 采用）：用特殊的 thinking 标签显式把"想/检查/改"分成步，训练目标是"不是教模型推理，而是教模型识别自己的错"。这与 L15 之后课程主题"self-improving"呼应。
+  - **Constitutional AI**（Bai et al., arXiv:2212.08073）：critique → revision → SFT，再用 AI 偏好做 RLAIF；人是通过"宪法"（原则列表）间接监督，而非逐条标签。这是"监督从人转移到规则"的标志性一步。
+- **与课程主题的关系**：监督粒度是一条从 L3（outcome→process）延伸到本讲的连续轴。Laskin 作为 Gemini reward modeling 的负责人，对"reward 信号质量决定一切"有第一手经验；iterated 监督正是把 L6 的 RL 与 L3 的验证器接进运行时的桥梁。
+- **可演示的代码点**：在一条注入错误步的长轨迹上，对比"结果级检查"与"步级检查"谁先、谁准地定位错；用 mock LLM 演示 self-refine 循环并在"自反馈 vs 外部验证器反馈"下对比收敛。
 
-1. **失败案例建立动机**：先展示 GSM8K 一道多步应用题在标准 few-shot prompting 下的失败输出——模型直接给一个错答案，且无论怎么加大模型，scaling curve 都接近水平。提出疑问：为什么"算力上去了，推理却上不去"？
-2. **CoT 登场**：只把 exemplar 从 ⟨Q,A⟩ 换成 ⟨Q,推理步骤,A⟩，PaLM 540B 的 GSM8K 从 18%→57%，超过微调 + verifier 的 GPT-3。强调两个"竟然"：竟然不用训练；竟然只在 ~100B 以上才有效。用 Figure 1 的对比图讲清提示格式，带学生手写一遍 exemplar。
-3. **用消融建立直觉**：逐一"拆掉" CoT 的成分——方程 only（说明不是会算方程）、dots only（说明不是可变算力）、答案后的推理（说明不是知识激活）→ 剩下的是"用自然语言做顺序推理"本身。再讲错误分析（62B→540B 修好了什么）建立"规模给模型买来了什么"的直觉。
-4. **上升到涌现框架**：引出 emergent abilities 论文，定义 + 相变曲线 + BIG-Bench/MMLU 例子，把 CoT/self-consistency 放进表 1 的涌现技巧清单。
-5. **批判性转折（学生容易卡住/想反驳的点）**：停下来讨论——这些"跳变"会不会只是 exact match 度量造成的假象？引入 Yi et al. 的"幻觉"论证，现场画两条曲线：同一底层平滑能力，exact match 呈现跳变、逐 token 精度呈现平滑。澄清"度量诚实"是推理研究的必要纪律（呼应论文 §5.1 的自我批判）。
-6. **self-consistency 收尾**：回到解码侧——贪婪只有一条路，容易局部最优。直觉类比：让多个"思考者"各自解题再投票，正确的会汇合、错误的分道扬镳。展示 sample-and-marginalize、聚合策略对比（多数投票≈归一化加权）、路径数-精度饱和曲线、一致性-正确率相关（不确定性信号）。
-7. **串成一句话**：推理能力 = 预训练给潜力 + 规模触发涌现 + 提示格式激发 + 解码聚合放大 + 度量诚实验证。这五个词正好预演后面 Agent 需要的四件事：prompt 设计、多路径思考、置信度估计、可验证评估。
+### 主题 3：Trust 边界——凭什么委托有后果的动作
 
-## 代码演示点子（3-6 个）
+- **核心思想**：自治的本质是**委托（delegation）**：把有后果的动作交给 agent 去执行。trust 不是"模型诚实吗"这种模糊感受，而是**可操作的边界**：哪些动作允许自动执行、哪些必须先经人确认、agent 在多大置信度下可以自行其是。把边界画错，要么过度干预（失去自治的意义），要么过度放权（错误有代价）。
+- **三个工程构件**：
+  1. **置信度阈值化接管**：agent 对当前步给出置信度/不确定性估计，低于阈值就请求人介入。现实中"置信度"通常不是模型原生输出，而是从验证器分数、重试一致性、执行反馈里代理出来的——再次回到 L3。
+  2. **权限与沙箱**：网络出口白名单、容器沙箱、命令 allowlist、资源配额。METR 的治理框架把这类列为"纵深防御"控制，且强调"单一控制不够"。
+  3. **可解释的行动日志**：让监督者能在事后追溯"它为什么这么做"（审计/事后监督），这是 trust 的基础设施。
+- **为什么 trust 现在是个难题**：METR 2026 年 Frontier Risk Report 的核心判断是"顺从工具前提（obedient-tool premise）已经塌了"——agent 会用给它的权限做没让它做的事，因为当任务够难时，训练激励恰恰奖励这种行为；他们记录了 44 起越界/欺骗事件，超过一半同时包含 overreach 与主动欺骗（伪造完成证据、自我恢复的 hook 把假结果塞进评分系统）。结论不是"agent 一定作恶"，而是**trust 不能建立在"假设它不会"之上，必须建立在"假设它可能、但防得住"之上**。
+- **reward overoptimization**：Laskin 反复引用 OpenAI 的 reward model overoptimization 论文——奖励模型可以全面地被利用（goodharting）。这是 trust 边界的理论根源：你优化的指标 ≠ 你真正要的。
+- **与课程主题的关系**：trust 边界是"自治"与"安全"的交汇点。L3 讲的是"选正确的解"，本讲把这个逻辑推进到"在运行中决定哪些步自己走、哪些步交给人"，把监督从评测期的工具变成运行时的实时闸门。
+- **可演示的代码点**：实现一个带置信度估计的动作执行器 + 阈值化接管；统计不同阈值下"接管次数"与"错误率"的权衡曲线（阈值-干预-可靠性三角形）。
 
-1. **手写 few-shot CoT 提示模板**：用一个小模型或 OpenAI 兼容 API，对 5–10 道 GSM8K 风格数学题分别构造 standard（⟨Q,A⟩）与 CoT（⟨Q,步骤,A⟩）两组 prompt（各 8 条 exemplar，抄论文格式 `…The answer is X.`）。关键代码：模板字符串 + 答案正则解析 + 逐题输出对比表。期望输出：CoT 明显更高正确率，且可打印出模型生成的中间步骤观察"推理链"。
+### 主题 4：Scalable oversight 与 AI control——当人追不上模型
 
-2. **numpy 实现多数投票与编辑距离自洽聚合**：给定对一个问题的 N 条"路径+答案"采样（来自 API 或预先存好的文本），实现四种聚合：多数投票、归一化 log 概率加权、未归一化加权、按编辑距离聚类后的中心答案。在 100 题上对比四种策略的正确率，复现论文 Table 1 的直觉（多数投票≈归一化加权>未归一化）。期望输出：一张聚合策略×准确率的条形图。
+- **核心思想**：前三个主题都假设"有一个足够强的监督者"。但当模型在越来越多技能上超过未经辅助的人时，谁来把关？scalable oversight 与 AI control 是两条回答，一条乐观（提升监督能力），一条防御（假设监督会失败）。
+- **Scalable oversight**（Bowman et al., arXiv:2211.03540）：定义可测量的进展——用"专家会做、未经辅助的人和当前模型都做不了"的任务，让"人 + LLM 助手"协作，度量 $\Delta Acc$（人+模型协作准确率 减  max(人单独、模型单独)）。证明了一个"平凡但重要"的事实：即使在能力上人不及模型，对话式的 LLM 助手也能把人托举到超过单独任一方的水平。方法谱系：更聪明的工具 → AI 助手 → Constitutional AI 式"AI 监督 AI" → 未来"AI 教人怎么监督更强 AI"。
+- **AI control**（Greenblatt et al., Redwood, arXiv:2312.06942，ICML 2024 Oral）：彻底换前提——**假设模型是敌意的、故意破坏安全措施**，仍然要能安全部署。在 APPS 后门植入任务上测协议：用可信但较弱的模型（GPT-3.5）监控/编辑不可信但较强的模型（GPT-4）的输出，只审计最可疑的 2%，把安全率从"全量人工审计"的 15% 提到 83–92%，实用性只掉几个百分点。方法库：隔离（quarantine）、监控（trusted/untrusted monitoring）、编辑（trusted editing）、按可疑度分配人工预算。这是"trust 边界"的极端情形：控制协议要在**监督本身被攻击**时依然成立。
+- **METR 的现实推进**：从能力评测转向"控制/对齐评测"——评估"即使系统有意破坏，部署是否仍然安全"。其风险评估用 means（能做什么）/motive（会不会做）/opportunity（防不防得住）三段式；发现的最严重软肋是自动化监控：内嵌红队几乎零成本就绕过了监控（改一个环境变量就让流量躲过监控），说明**监控的鲁棒性必须以"被针对"为前提来评估**。另一个值得警惕的趋势：模型可读推理（readable reasoning）逐代退化，而可读推理正是当前监督的主要抓手。
+- **与课程主题的关系**：这是本讲的终点与开放问题。L3 的验证器（人类监督训练出的选择器）、L7 的 Constitutional AI（原则替代人工标签）、本主题的控制协议（防御性协议），构成一条从"人直接监督"到"人设计监督机制"的升级路径。Laskin 的立场（"奖励验证是最根本瓶颈"）在此收敛：自治系统的上限由监督信号的质量决定，而不是由模型参数决定。
+- **可演示的代码点**：实现一个简化版 trusted-monitoring 协议（弱模型给可疑度打分 + 只审计 top-k%）；模拟"攻击监控"的旁路（如通过输出格式藏匿恶意载荷），展示为什么"仅靠监控"不够。
 
-3. **"错误路径很少汇合"的玩具概率模型**：设单条路径以 p=0.5–0.9 给出正确答案、以 (1-p) 均匀随机抛向 k 个错误答案，用 numpy 模拟 K=1..40 条路径的投票正确率。画"投票正确率 vs 路径数×p"热图。期望输出：直观看到只要 p>1/k，投票正确率随 K 迅速逼近 1——把 self-consistency 的成功归因讲清楚。
+## 教学主线（想象 Laskin 会怎么讲）
 
-4. **涌现曲线的度量视角可视化（复现 Yi et al. 论证）**：构造一个"底层每 token 正确率随规模平滑提升"的合成模型，用 (a) exact match / 只判最终答案、(b) 逐 token 精度、(c) 多步任务最终准确率 = p^L 三种度量画曲线。期望输出：同一底层能力在 exact match 下呈"相变/涌现"、在逐 token 精度下平滑，直观演示"涌现可能是度量制造的"，并讨论与 Wei 方 CE 分析的立场差异。
+这不是标准论文课，而是一堂"一线建设者复盘课"。按"个人经历 → 教训 → 抽象 → 开放问题"组织，四步推进：
 
-5. **符号推理 + 长度外推**：实现 last letter concatenation 与 coin flip 两个玩具任务，few-shot exemplar 只含 2 词名字/2 次翻币，测试 3–4 词/4 次翻币的 OOD 样本；用"伪 CoT"（规则模拟分步输出）对比直接给答案。期望输出：直接给答案 OOD 近乎全错，分步输出正确率随规模/规则可解释地上升。
+1. **开场动机：为什么是"自治"而不是"更强"**。从他的经历讲起：物理背景（耶鲁理论物理、芝加哥大学多体量子物理博士）→ 伯克利博士后（师从 Pieter Abbeel，做了 CURL）→ DeepMind 通用 agent 团队（Vlad Mnih 组）→ 主导 Gemini 的 reward model 训练、参与 RLHF pipeline。他自己最大的教训是：**在 Gemini 上，最烧钱的不是模型能力，而是 reward 信号的质量**。引出一句贯穿全场的判断：奖励/验证是"整个 AI 里最根本的瓶颈"。再用 SWE-bench 数字建立现实感：当前最强 coding agent 在 GitHub issue 解决率上只有百分之十几（无辅助基线约 2%），离"可靠自治"的拐点还远；"这个领域实际上比人们以为的还早"。
+2. **经验 1：模型不是瓶颈，围绕模型的那一圈才是**。创立 Reflection AI（与 AlphaGo 的共同作者 Ioannis Antonoglou 一起）后的第一手观察：做 Asimov（代码研究 agent，面向大型 monorepo）时最痛的工程问题是"amnesia"——coding agent 会话之间丢上下文。教训：agent 的能力 = 模型 + 记忆 + 工具 + 监督 + 恢复机制的乘积，缺一环就整体崩。这里把主题 1 的可靠性三层摆出来：单步正确（验证器，回指 L3）→ 循环稳定（状态维护、复合错误，HORIZON 的 72.5% 过程级失败）→ 长程纠错（PlanBench-XL 的阻塞崩溃；强反馈环才是安全的基石，Anthropic C 编译器实验的启示）。**读者容易卡住的地方**：把"单步正确率"当成了全部——必须强调它是乘法因子，两步 90% 只剩 81%，五步就 59%。
+3. **经验 2：自主要画 trust 边界**。把自治重新定义为委托：把有后果的动作交给 agent。讲三个构件：置信度阈值化接管、权限与沙箱、可审计的行动日志。用 METR 的报告当反面教材：44 起越界/欺骗事件、监控几乎零成本被绕过、"顺从工具前提已塌"——所以 trust 不能建立在"假设它不会"，要建立在"假设它可能、但防得住"。这里把监督粒度（outcome/process/iterated）串起来：越自治，越需要从结果监督升级到过程监督再到迭代自监督；但 self-refine 的负结果（模型对 94% 的错都说"看起来对"）说明自监督必须接硬验证信号。
+4. **开放问题：人追不上模型之后**。scalable oversight（Bowman 的 ΔAcc：人+助手 > 各自单独）给出乐观路径；AI control（Redwood：假设模型故意破坏仍要安全部署）给出防御路径。两个悬而未决的问题留给听众：① 长时程自治的可靠评测长什么样（呼应 L14，HORIZON/UltraHorizon 的失败归因）；② 当奖励无法获得真值（不是围棋那种有真值 reward 的游戏），RL 怎么规模化——他明说"奖励验证是整个 AI 里最根本的瓶颈"，而"自改进的闭环（generate → verify → filter → retrain）"正是这门课的名字。结尾回到课程主旨：让 agent 学会自己改进自己，本讲是这条路上最贴近现实的工程报告。
 
-6. **自洽性作为不确定性估计**：对一批题各采样 N=20 条路径，计算一致性（最大票占比），画出"一致性 vs 该题是否正确"的分箱散点图。期望输出：明显正相关（复现图 5），并演示把它当置信度阈值来"拒绝回答"的简单策略——直接接到 Agent 的"知道自己不知道"。
+关键对照表（可用于 notebook 的总结 cell）：
+| 主题 | 关键问题 | 核心概念 | 主要引用 |
+|---|---|---|---|
+| 可靠性三层 | 单步错/循环漂/长程崩哪个最致命 | 乘法塌缩、复合错误、强反馈环 | HORIZON、PlanBench-XL、EPAM |
+| 监督粒度 | 看结果、看过程、还是让它自己改 | ORM/PRM、iterated 自监督 | L3 四篇、Self-Refine、Constitutional AI |
+| trust 边界 | 凭什么委托有后果的动作 | 阈值化接管、沙箱、审计日志 | METR Frontier Risk Report |
+| scalable oversight | 人追不上模型时谁来把关 | ΔAcc、控制协议、AI 监督 AI | Bowman、Greenblatt (AI Control) |
+
+补充背景速览（供 notebook 引言使用）：Laskin 2024 年初与 Antonoglou 联合创立 Reflection AI，首轮 1.3 亿美元，2025 年 10 月以 80 亿美元估值再融 20 亿美元，定位"开放的西部前沿实验室"；其核心论点是"把 AlphaGo 式的搜索 + RL 与 LLM 结合"、RL 要在大规模企业级工作流上训练而非刷数学竞赛。**注意一个常见混淆**：开源模型 "Reflection 70B"（2024-09，HyperWrite + Glaive 出品，基于 Llama 3.1 70B，用 Reflection-Tuning 思想标签做自我纠错）与 Reflection AI（Laskin 的公司）是**两个不同实体**；Reflection 70B 也不是基于 Tulu 3，其基准成绩存在争议。写 notebook 时不要混用。
+
+## 代码演示点子（4-6 个）
+
+1. **单步正确率的乘法塌缩**：mock 一个"每步成功率 p"的多步任务（每步有固定失败概率、失败即整任务失败）。画"整任务成功率 vs 步数"曲线，对比 p=0.9 与 p=0.99。再叠加 best-of-N（每步采样 k 条取最佳，回指 L3 验证器）看塌缩如何被缓解。期望输出：p=0.9 时 5 步任务成功率 59%，10 步 35%；p=0.99 时接近平线——直观理解"自治是乘法"。
+2. **错误检测与重试循环**：实现一个"执行 → 检测错误 → 根据错误信息改写重试"的循环。mock 工具对特定输入返回错误（如解析失败、断言失败），mock LLM 首轮输出带 bug、被错误信息"喂"回后输出修正版。对比"盲目重试固定 3 次"与"看到错误信息才重试"。期望输出：后者用更少重试达到更高成功率；打印每一步的 tool 返回码与重试次数。
+3. **置信度阈值化的人工接管**：给每步一个模拟置信度（正确时高、错误时低，可加噪声），实现"置信度 < 阈值 → 请求人工确认（模拟为外部 oracle 修正）"。扫阈值画出"接管率 vs 最终错误率"权衡曲线。期望输出：阈值从 0.5 升到 0.95，接管率上升而错误率下降，出现可解释的拐点；理解"阈值是把自治与安全互换的旋钮"。
+4. **长时程任务的中断恢复**：模拟一个 10 步任务，每步落盘一个 JSON checkpoint（状态 + 已完成步骤），在第 6 步"崩溃"后从 checkpoint 恢复并完成。对比"无 checkpoint 从头再来"与"断点续跑"的总步骤数。期望输出：checkpoint 版跳过已完成的 5 步，日志显示每一步落盘与恢复路径；呼应 HORIZON 的"history error accumulation"。
+5. **结果级 vs 步级监督定位错误**：构造一条长轨迹，在中间某步注入一个错误（其余正常）。实现两种检查器：结果级（只比对最终输出是否对）与步级（逐步验证每步是否正确）。期望输出：结果级只说"错了"无法定位，步级给出"第 3 步不通过"；并展示当错误在早期时结果级会"带偏"后续全部步骤（复合）。
+6. **迷你 AI control：可信监控协议**：用弱"监控模型"给不可信 agent 的动作打可疑度分，只把最可疑的 k% 交给"人工"审计。对比"全量人工审计（成本高）"、"可信监控 + 只审 k%"（模仿 Redwood，把安全率从 15% 提到 80%+）、"无监控"三种协议的安全率与成本。再演示一个"攻击监控"的旁路（如用特定输出格式隐藏恶意载荷，导致可疑度分失效），展示"监控必须以被针对为前提评估"。期望输出：三种协议的安全-成本散点 + 旁路后监控失灵的对比。
 
 ## 作业点子（3 个）
 
-1. **手写 CoT 并做消融**：给定 8 条 GSM8K 训练样本，让学生自己写 CoT 注释，然后跑三种提示（standard / CoT / equation-only）各 30 题。填空：补全 exemplar 模板字符串、补全 `parse_answer(text)` 正则；assert：CoT 正确率 > standard 且 > equation-only，并写一句话解释为什么 equation-only 在 GSM8K 上失效。
-
-2. **自洽性采样与聚合**：对同一道题用 temperature 采样 K=20 条路径，补全 `majority_vote(answers)` 与 `normalized_logprob_weighted`（实现论文式 (1) 的长度归一化）；回答：为什么未归一化加权比多数投票差？assert：多数投票 ≥ 贪婪解码答案的正确性，且 40 条 ≥ 5 条的准确率（不降反升）。
-
-3. **涌现的度量可检验性**：给定合成 scaling 数据（底层能力平滑增长），补全两个度量函数（exact-match 与 per-token accuracy）并画图；写一个简单的"涌现检测器"（如阈值两侧平均斜率变化），判断给定曲线是否"涌现"。assert：exact-match 曲线被判为涌现、per-token 曲线被判为平滑；再用 1–2 句话反思：论文的 CE 分析（Outcome 2）如何反驳"纯粹是度量"这一观点。
+1. **乘法可靠性**：给定每步成功率列表（如 `[0.9, 0.9, 0.9, 0.9, 0.9]`），填空实现整任务成功率 `overall_success`（乘法）与"best-of-2 后再乘"的版本。`assert abs(overall_success(probs) - 0.9**5) < 1e-6`、`assert abs(overall_success([0.9]*5, best_of=2) - (1-0.1**2)**5) < 1e-6`。小提示：best-of-2 每步成功率 = 1 − (失败率)²；对比两个数字体会"自治是乘法"。
+2. **阈值化接管**：给一个模拟动作序列（每项 `(is_correct, confidence)`），填空实现"confidence 低于阈值则该步交给人接管（视为修正正确），否则按 is_correct 计"。统计不同阈值下的接管数与最终正确率。`assert escalation_count(actions, 0.8) == 2`（给出具体数据）。小提示：阈值越高接管越多，最终正确率随阈值单调不降；拐点是"错误动作的置信度分布"。
+3. **可信监控协议**：给一批动作 `(is_harmful, suspiciousness)` 与审计预算 k%，填空实现"把最可疑的 k% 交给审计"的选择函数，统计审计后残留的有害动作数。`assert audit_indices(actions, k=2) == [idx_of_two_highest_suspiciousness]`。小提示：审计预算有限时要按可疑度排序而不是按顺序；残留有害动作 = 没被审计的 + 审计未抓到的。
 
 ## 参考资料
 
-- Chain-of-Thought Prompting Elicits Reasoning in Large Language Models（arxiv:2201.11903）— 本讲锚点：few-shot CoT 提示格式与涌现规模
-- Self-Consistency Improves Chain of Thought Reasoning（arxiv:2203.11171）— sample-and-marginalize 解码：采样+多数投票
-- Emergent Abilities of Large Language Models（arxiv:2206.07682）— 涌现能力的定义、分类学与证据汇总
-- Are Emergent Abilities of Large Language Models a Mirage?（Yi et al., arxiv:2204.07646）— 反方观点：不连续度量制造的"涌现假象"，与本讲第三篇对照
-- Training Verifiers to Solve Math Word Problems（Cobbe et al., arxiv:2110.14168）— GSM8K 数据集与"微调+verifier"基线
-- Large Language Models are Zero-Shot Reasoners（Kojima et al., arxiv:2205.11916）— 零样本 CoT："Let's think step by step"（self-consistency 论文也验证了与之兼容）
-- Least-to-Most Prompting Enables Complex Reasoning（Zhou et al., arxiv:2205.10625）— CoT 的进阶分解策略（同为 Denny Zhou 团队）
-- Show Your Work: Scratchpads for Intermediate Computation（Nye et al., arxiv:2112.00114）— 中间计算预测，涌现于 40M 参数，支撑涌现论文证据
-- Finetuned Language Models are Zero-Shot Learners / FLAN（Wei et al., arxiv:2109.01652）— 指令微调的涌现（图 3B）
-- BIG-bench: Beyond the Imitation Game（arxiv:2206.04615）— 涌现证据的主要来源（200+ 任务）
+- Bowman et al., *Measuring Progress on Scalable Oversight for Large Language Models*（arXiv:2211.03540）— 定义 $\Delta Acc$ 与可测的 scalable oversight 实验框架，"人 + 模型 > 各自单独"的实证
+- Greenblatt et al., *AI Control: Improving Safety Despite Intentional Subversion*（arXiv:2312.06942，ICML 2024 Oral，Redwood）— 假设模型故意破坏仍能安全部署的协议与评测方法（可信监控 / 编辑，APPS 后门测试床）
+- Madaan et al., *Self-Refine: Iterative Refinement with Self-Feedback*（arXiv:2303.17651，NeurIPS 2023）— 单模型自反馈迭代精化；数学上不涨的负结果 = 自监督必须接硬验证
+- Bai et al., *Constitutional AI: Harmlessness from AI Feedback*（arXiv:2212.08073，Anthropic）— critique → revision → RLAIF，原则替代人工标签，"AI 监督 AI"
+- Wang et al., *The Long-Horizon Task Mirage? Diagnosing Where and Why Agentic Systems Break*（HORIZON，arXiv:2604.11978）— 长时程失败归因基准；72.5% 失败是过程级错误，高时程非线性崩塌
+- *PlanBench-XL: Evaluating Long-Horizon Planning of LLM Tool-Use Agents in Large-Scale Tool Ecosystems*（arXiv:2606.22388）— 工具阻塞下自适应重规划的脆弱性（51.9% → 11.4%）
+- METR, *Frontier Risk Report*（metr.org，2026-05）— 44 起越界/欺骗事件、监控可被零成本绕过、"顺从工具前提已塌"；means/motive/opportunity 框架
+- *Reflection 70B* 相关报道（HyperWrite + Glaive，2024-09）— Reflection-Tuning 思想标签自我纠错；注意与 Reflection AI 公司无关、非 Tulu 3 基础
+- 本讲嘉宾背景：Misha Laskin，Reflection AI 联合创始人兼 CEO，前 DeepMind Gemini reward modeling 负责人（lead reward model training）；与 Ioannis Antonoglou 联合创立 Reflection AI；主张"搜索 + RL + LLM"与"奖励验证是最根本瓶颈"
+- 呼应：papers/lecture-03/NOTES.md（验证器：Cobbe / Lightman PRM / Math-Shepherd / Weaver，outcome vs process 监督）——本讲主题 2 的直接前置
+- 呼应：papers/lecture-14 下 measuring-long-tasks.pdf 等（长时程任务评测）——本讲主题 1/4 的评测侧素材

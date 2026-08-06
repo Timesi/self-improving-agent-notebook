@@ -18,5 +18,4 @@ python scripts/download_papers.py --dry-run      # 只查看计划
 ## 说明
 
 - 个别讲座无 arxiv 论文（如 AlphaGeometry 发在 Nature、AlphaProof 是 DeepMind 博客、
-  嘉宾讲座无指定论文），参考材料以 `.md` 文件形式入库（如 `lecture-16/alphageometry-readme.md`）。
-- L10-L12 为中期展示，无论文。
+  嘉宾讲座无指定论文），参考材料以 `.md` 文件形式入库（如 `lecture-13/alphageometry-readme.md`）。

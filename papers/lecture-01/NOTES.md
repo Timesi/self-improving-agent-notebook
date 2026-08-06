@@ -9,7 +9,7 @@
 
 这一讲要回答的核心问题：**AI Agent 是什么？为什么说它是 LLM 的下一个形态？这门课沿着什么路线，把 Agent 从概念亲手做出来？**
 
-为什么放在第 1 讲：它是整门课的路线图。后续每一讲都是这张地图上的一块——test-time compute（L2）、验证器（L3）、工具与代码反馈（L4）、多步规划（L5）、RL 训练（L6）、开放进化（L7）、搜索与深度研究（L8）、后训练演进（L9）、SWE 工程（L13）、记忆（L14）、评测（L17）、自治与机器人（L18/19）。它们全部服务于同一个对象：让一个 LLM 在循环里做更聪明的事。先给全局坐标，再逐讲填细节。
+为什么放在第 1 讲：它是整门课的路线图。后续每一讲都是这张地图上的一块——test-time compute（L2）、验证器（L3）、工具与代码反馈（L4）、多步规划（L5）、RL 训练（L6）、开放进化（L7）、搜索与深度研究（L8）、后训练演进（L9）、SWE 工程（L10）、记忆（L11）、评测（L14）、自治与机器人（L15/19）。它们全部服务于同一个对象：让一个 LLM 在循环里做更聪明的事。先给全局坐标，再逐讲填细节。
 
 本讲承担三个任务：
 
@@ -55,7 +55,7 @@
 Agent 化逐一突破这四条边界：
 
 1. 工具调用把"说"变成"做"——搜索、代码执行、文件读写、GUI（L4 专门讲）。
-2. 循环与记忆突破上下文——多步执行、外部记忆（L5 规划、L14 记忆）。
+2. 循环与记忆突破上下文——多步执行、外部记忆（L5 规划、L11 记忆）。
 3. 执行反馈引入"运行才知道对错"的强信号——验证器（L3）、代码反馈与 RLEF（L4）。
 4. 搜索/采样/推理算力补偿单次生成的质量——test-time compute（L2）。
 
@@ -77,7 +77,7 @@ Agent 化逐一突破这四条边界：
 
 围绕循环，有几个常被讲成独立模块、其实是循环"配件"的东西：
 
-- **记忆 Memory**：短期是上下文中的消息历史，长期是外部存储（向量库/文件），把循环从上下文窗口解放出来（L14）。
+- **记忆 Memory**：短期是上下文中的消息历史，长期是外部存储（向量库/文件），把循环从上下文窗口解放出来（L11）。
 - **规划 Planning**：把目标分解成子目标，或对动作序列做搜索（L5）。
 - **验证 Verification**：在循环之外加一个检查环节，让"输出"经过验证才被接受（L3）。
 
@@ -91,9 +91,9 @@ Agent 化逐一突破这四条边界：
 | Tool use / Function calling | LLM 学会输出结构化工具调用，工具结果作为输入 | Toolformer (2023)、OpenAI function calling、MCP | L4；MCP 是工具接口标准 |
 | Planning / Search | 先分解任务或对动作空间做搜索，而非走一步看一步 | LATS (2023)、ADaPT、SPRINT | L5 多步规划 |
 | Multi-agent | 多个 agent 协作、辩论、分工，Agent 从单体变成社会 | AutoGen (2023)、CrewAI、CAMEL | L6/L7 训练与进化中的合作形态 |
-| Memory-based | 显式长期记忆让 Agent 跨会话、跨长任务工作 | MemGPT (2023)、Cartridges | L14 记忆 |
+| Memory-based | 显式长期记忆让 Agent 跨会话、跨长任务工作 | MemGPT (2023)、Cartridges | L11 记忆 |
 | Agentic frameworks | 把循环、工具、记忆封装成库，工程上"开箱即用" | LangChain/LangGraph、AutoGen、Claude Agent SDK | 全课参照物（本课从零实现，不依赖它们） |
-| 特殊形态：代码即行动 / Computer-use / 深度研究 | Agent 通过写代码、操作 GUI、多源检索完成任务 | AlphaCode、OpenAI Computer Use、深度研究 Agent | L8、L13、L16、L19 |
+| 特殊形态：代码即行动 / Computer-use / 深度研究 | Agent 通过写代码、操作 GUI、多源检索完成任务 | AlphaCode、OpenAI Computer Use、深度研究 Agent | L8、L10、L13、L16 |
 
 强调两点：
 
@@ -106,8 +106,8 @@ Agent 化逐一突破这四条边界：
 
 - **Part 1 Foundation（L1-L5）**：从"LLM 只能生成"出发逐层加能力——test-time compute 缩放（L2）、答案验证（L3）、工具与代码反馈（L4）、多步规划（L5）。
 - **Part 2 Training & Evolution（L6-L9）**：Agent 不是写死的，要训练与进化——RL 训练期缩放（L6）、开放进化让 Agent 设计 Agent（L7）、搜索与深度研究 Agent（L8）、从 Chatbot 到 Agent 的后训练演进（L9）。
-- **Part 3 Agent Engineering（L13/L14/L17）**：把 Agent 做成工程——SWE Agent（L13）、记忆系统（L14）、评测与长程任务（L17）。
-- **Part 4 Frontiers（L15/L16/L18-L20）**：边界在哪里——LLM 推理（L15）、数学 Agent（L16）、自治 Agent（L18）、多模态机器人（L19）、未来方向（L20）。
+- **Part 3 Agent Engineering（L10/L11/L14）**：把 Agent 做成工程——SWE Agent（L10）、记忆系统（L11）、评测与长程任务（L14）。
+- **Part 4 Frontiers（L12/L13/L15-L17）**：边界在哪里——LLM 推理（L12）、数学 Agent（L13）、自治 Agent（L15）、多模态机器人（L16）、未来方向（L17）。
 
 教学契约（本课最重要的一句话）：从这一讲起，每个概念都按 直觉理解 → 手算验证 → 代码实现 → 实验观察 推进。第一课的任务是让学生在下课前写出第一个最小循环。
 
@@ -141,7 +141,7 @@ Agent 化逐一突破这四条边界：
 
 3. **用 llm_client 演示 tool-calling 最简版**：实现 `parse_action(text)` 解析 mock/真实 LLM 输出的 ReAct 格式（`Thought: ...` / `Action: name(args)` / `Final Answer: ...`），配一个 `execute(actions, registry)` 执行器，跑 2-3 轮。动作解析要宽容：mock 的脚本化轨迹与真实模型的 JSON 都要能消化。**关键观察**：工具调用本质是纯文本协议，格式约定（今天常用 JSON、MCP）只是把这个协议标准化。
 
-4. **Agent 组件可视化（课程地图图）**：用 matplotlib 画感知—决策—执行—反馈的闭环图（英文标签），把记忆、规划、验证作为"配件"挂到对应环节，并给每个组件标注对应讲次（工具→L4，规划→L5，验证→L3，记忆→L14，训练→L6-L9）。**关键观察**：一图把 17 讲安到 Agent 循环上，学生看到的是整门课的地图。
+4. **Agent 组件可视化（课程地图图）**：用 matplotlib 画感知—决策—执行—反馈的闭环图（英文标签），把记忆、规划、验证作为"配件"挂到对应环节，并给每个组件标注对应讲次（工具→L4，规划→L5，验证→L3，记忆→L11，训练→L6-L9）。**关键观察**：一图把 17 讲安到 Agent 循环上，学生看到的是整门课的地图。
 
 5. **Agent 范式分类卡片**：用字典定义每个范式（ReAct / Tool use / Planning / Multi-agent / Memory / Framework）的关键词、代表工作、一句适用场景；再给几个真实场景让学生选范式。mock 下就是一个表格加映射练习。**关键观察**：范式不互斥，一个真实 Agent 常同时是 ReAct + Planning + Memory。
 

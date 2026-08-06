@@ -1,110 +1,117 @@
-# Lecture 13 — 软件工程智能体（Agentic Frameworks for Software Engineering）研读笔记
+# Lecture 13 — 迈向超级人类推理：AlphaProof、AlphaGeometry 与 Gemini 的 IMO 金牌 研读笔记
 
 > 本文件是 CS329A 第 13 讲的论文研读笔记，是编写对应 notebook 的素材。
 > 来源：https://cs329a.stanford.edu/（Autumn 2025 课程大纲）
->
-> 对应 OUTLINE 章节：13-swe-agents.ipynb（代码任务中的 test-time compute：CodeMonkeys / 让 LLM 写高效内核：KernelBench / Agent-System 接口设计 / SWE-Agent 循环的构建）。
+> 嘉宾：Thang Luong（Google DeepMind Research Director，AlphaProof / AlphaGeometry 核心团队）
 
 ## 课程主题
 
-这一讲要解决的核心问题：**如何把 Agent 用到真实的软件工程任务上，并度量它的价值**。前几讲已经把 Agent 循环、验证器、工具使用讲清楚了，但那些大多在"合成任务"（数学、搜索、问答）上。软件工程是 Agent 最有经济价值的真实场景：代码库巨大（SWE-bench 一个仓库几百万 token）、反馈来源丰富（编译错误、测试失败、profiler）、成功标准多元（既要正确也要快）。本讲回答三个递进的问题：一是 test-time compute 在代码任务里怎么缩放（CodeMonkeys 给出"串行修复循环 + 并行采样 + 选择"的完整配方）；二是评测标准怎么设计——当"对"不够、还要"快"时怎么办（KernelBench 引入 fast_p 指标）；三是 Agent 和底层系统之间要靠什么样的"接口"才能对齐（Agent-System Interface）。
+这一讲回答一个核心问题：**为什么数学是检验"AI 推理"的试金石，以及靠什么技术组合 AI 才能在 IMO 上拿奖。** 数学竞赛题的三个特性让它成为 Agent 推理能力的理想试金石：(1) **可验证**——证明对不对有客观判据，不能靠"看起来合理"糊弄过去，这与开放域对话的模糊评价形成鲜明对比；(2) **奖励稀疏**——要么证出来了（满分 7 分）要么没有（0 分），中间没有渐进奖励，训练信号极其稀缺；(3) **需要搜索与工具**——单次生成几乎必然失败，需要在巨大的证明空间里搜索、需要提出新的辅助构造、需要形式化验证器把关。
 
-为什么安排在这个位置：L13 是 Part 3（Agent Engineering）的第一讲，前面 L1-L9 建立了"循环 + 验证 + 工具 + 搜索 + 后训练"的底层能力，本讲把这些能力组装成一个能解决真实 GitHub issue 的完整系统，并示范"为评测而设计的任务"如何反过来牵引系统设计。L14（记忆）和 L17（评测与长程任务）紧接着它，分别补足记忆系统和更系统化的评测方法。
-
-教学上本讲用一个"把工程问题切成三段"的主线：**找上下文 → 生成候选 → 选择答案**（context → generation → selection）。这个三段切法（CodeMonkeys 明确提出）是 SWE-agent 系统设计的通用脚手架，也贯穿 SWE-Agent、Agentless 等所有主流方法。
+这一讲的位置在 Part 4 Frontiers（前沿）的中段，紧接 L12（LLM 推理：CoT、自洽性、推理模型）。它把前面所有积木**拼成一个追求"超级人类推理"的完整系统**：L02 的 test-time compute scaling（推理时多花计算换更好的结果）、L03 的验证器（这里升级为**形式的、可靠的 Lean 验证器**，而不是 LLM-as-judge）、L08 的搜索（AlphaCode 的三件套在证明空间里的重演）、L07 的开放进化/RL 自我改进（AlphaZero 自我对弈范式）。整讲以 IMO 这条线贯穿：AlphaGeometry（几何，神经-符号）→ AlphaProof（形式化证明 + RL）→ Gemini Deep Think 拿下 IMO 2025 金牌（纯自然语言路线）。
 
 ## 论文精读
 
-### 论文 1：CodeMonkeys: Scaling Test-Time Compute for Software Engineering（arXiv:2501.14723，codemonkeys.pdf）
-- **核心思想**：把 test-time compute 的缩放（L2 的主题）真正用到 SWE-bench Verified 上，并回答"如果一个系统从一开始就是为了吃 test-time compute 设计的，它该怎么搭"。答案是把一个 issue 的解决拆成三个子任务：找相关文件（context）、生成候选编辑（generation）、从候选里挑对的（selection），然后分别缩放：**串行缩放** = 让模型和测试脚本一起迭代修复（每增加一次迭代，就是多花一串 compute）；**并行缩放** = 每个 issue 独立采样多条修复轨迹。关键洞察：因为并行采样了很多条轨迹，找上下文的成本可以在下游样本间摊薄，于是可以用最朴素的方法——让一个便宜模型（Qwen2.5-Coder-32B，本地跑）把代码库里每个文件都读一遍来判断相关性。CodeMonkeys 在 SWE-bench Verified 上拿到 57.4%，花约 2300 美元。
-- **关键公式/算法**：
-  - 三段式评测指标：Context 用 recall（所有需要改的文件都被放进上下文的题目占比，128k 上限下 92.6%）；Generation 用 coverage（至少一条采样编辑正确的题目占比，最优 69.8%）；Selection 用最终 score（提交的编辑被官方测试判对的题目占比，57.4%）。三者的关系是：coverage 是"生成的天花板"（oracle selection 的上界），selection 决定能从天花板收回来多少。
-  - 上下文流水线：Qwen2.5-Coder 逐文件扫描判断相关（只扫 Python 文件、排除 test 目录，平均处理 294 万 token/题）→ 对相关文件生成摘要 → 用 Claude 排序（temperature 0，重复 3 次取平均 rank）→ 装进最多 128k token 的上下文窗口。平均上下文 74,570 token，相对全量压缩 50.5x；扫描+排序总共只占成本 15%（因为摊薄到了 10 条下游轨迹上）。
-  - 生成阶段 = 两个背靠背的**状态机**（state machine 抽象来自 Moatless Tools）：①Testing State Machine 先独立迭代出一个能复现 issue 的测试脚本（standalone Python，exit 0 表示修复、exit 2 表示未修复）；②Editing State Machine 以该测试为种子，用 aider 风格 diff 迭代生成编辑，且允许同时改测试——这就是论文强调的"two-sided debugging"：测试要在未编辑代码库上失败、在编辑后通过。每次迭代都把执行输出喂回模型。每 issue 跑 10 对状态机，每台最多 8 次迭代，temperature 0.5。
-  - 选择阶段（4 种方法对比）：①用测试多数投票（把 10 个生成的测试各跑在 10 条编辑上，选通过最多的）；②纯模型选择；③模型选择但先按测试通过数过滤出 top-3；④**选择状态机** + top-3 过滤：让模型写"能区分候选"的新测试，跑了再决定选谁或再写测试，最多 10 次迭代。最优的是④，得 57.4%。
-  - 关键数字：随机选择只有 45.8%，oracle（=coverage）69.8%——选择方法收回了随机与 oracle 之间大约一半的差距。Barrel of Monkeys（把 CodeMonkeys 的编辑和 SWE-bench Verified 排行榜 top-4 提交合并成 5 样本池，coverage 80.8%）用选择状态机做到 66.2%，超过池子里最好的单个方法（Blackbox 62.8%），只比 o3 报告的 71.7% 低 5.5pt。
-  - 成本拆解（表 1）：总 2291.90 美元。生成编辑占 59.6%、生成测试 19.2%、相关性扫描 14.6%、选择 5.8%、排序 0.9%。
-  - 缩放规律（图 5）：coverage 随"状态机数 × 每台迭代数"增长，前几个迭代收益最大；**相同总预算下，串行/并行的不同分配常得到相近的 coverage**——但两者不完全可互换：并行多采样会让选择更难，串行深轨迹则绕开选择问题，只是当模型"错误地批准"自己的编辑时，增加迭代上限救不回来，而并行加一条新轨迹总能"重新开始"。
-  - 附录：用 DeepSeek-V3 替换 Claude 做生成/选择，在 100 题子集上拿到 Claude 成绩的 86.8%，但 API 便宜一个数量级——"便宜模型大量采样 + 强选择器"是成本敏感的选择。
-- **关键实验结论**：57.4%（SWE-bench Verified，约 2300 美元/500 题）；coverage 69.8%；oracle selection 时 69.8% 超过了当时排行榜上除 o3 外的所有提交。选择阶段证明了"选得对不对"对最终分数至关重要：随机 45.8% → 简单投票 53.0% → 模型选择 52.0% → top-3+模型 55.6% → **top-3+选择状态机 57.4%**。
-- **与课程主题的关系**：本讲第一块砖——把 L2 的"采样+验证"升级成能在真实 GitHub 仓库上运转的完整 agent 循环。三段式分解（context/generation/selection）是整讲的教学骨架；"让模型写测试"的强制要求同时服务了两件事：给迭代提供更细的执行反馈、给选择提供（不完美的）验证器——这正是 L3 验证器思想在代码域的落地。状态机是"SWE-Agent 循环的构建"（OUTLINE 第 4 点）最直接的可实现范本。
-- **可演示的代码点**：从零搭一个迷你状态机（生成编辑+测试 → 跑测试 → 拿 exit code 反馈 → 迭代）；实现 coverage 公式并画"采样数-覆盖率"曲线；实现三类选择器（测试多数投票 / 模型选择 / 选择状态机）并在合成候选池上对比；复现"摊薄上下文成本"的成本账。
+### 论文 1：AlphaGeometry: An Olympiad-level AI system for geometry（Nature，2024，DOI:10.1038/s41586-023-06747-5，无 arxiv；材料 alphageometry-readme.md）
 
-### 论文 2：KernelBench: Can LLMs Write Efficient GPU Kernels?（arXiv:2502.10517，kernelbench.pdf）
-- **核心思想**：把评测从"代码对不对"推进到"代码对不对且快不快"。给 LLM 一个 PyTorch 参考实现（`Model` 类），要求它输出一个同样接口但内部换成自定义 CUDA/Triton 内核的 `ModelNew` 类，然后自动评测两条轴：功能正确（随机输入对比输出）和性能（wall-clock 加速比）。250 个任务按算子数分三级：Level 1 单算子（100）、Level 2 算子序列（100，考融合）、Level 3 完整架构（50，AlexNet/MiniGPT）。动机来自现实：FlashAttention 这类关键内核在 Transformer 提出 5 年后才出现、换硬件还要再花 2 年——如果 LLM 能自动写高效内核，价值直接兑现为推理/训练成本和能耗的下降。
-- **关键公式/算法**：
-  - fast_p 指标：$\text{fast}_p = \frac{1}{N}\sum_{i=1}^{N}\mathbb{1}[\text{correct}_i \land \text{speedup}_i > p]$，其中 $\text{speedup}_i = T_{\text{Model}}/T_{\text{ModelNew}}$。p 是加速比阈值：fast_0 就是纯正确率，fast_1 是"正确且比 PyTorch Eager 快"。把 p 当旋钮就能画整条"加速比分布"曲线，也便于将来把基线升级（如对 torch.compile）。评测细节：正确性用 5 组随机输入；性能预热 3 次、100 次计时取均值（CV<3%）；只允许同一时间一个 kernel 在 GPU 上跑。
-  - 任务格式：输入是含 `get_inputs()`/`get_init_inputs()` 的 PyTorch `Model`；输出 `ModelNew` 用 `torch.utils.cpp_extension.load_inline` 内联 CUDA（论文给出完整 add/matmul 例子）。LM 要自己决定优化哪些算子、用什么技术（融合、tiling、共享内存、tensor core/wmma、PTX）。
-  - one-shot 基线：单一 in-context 示例（add 算子）+ greedy 解码。所有前沿模型平均在 <20% 任务上快于 PyTorch Eager（表 1）：DeepSeek-R1 在 L2 36%、L1 12%；o1 在 L2 24%、L1 10%；其余多是个位数；对 torch.compile 基线更低。
-  - 两种测试时方法（同为 10 次调用预算，表 2）：**repeated sampling**（高温度并行采样 k 条，fast_p@k = 至少一条达标）与 **iterative refinement**（多轮把生成 G + 执行反馈 E + profiler 反馈 P 喂回模型）。迭代更优（6 例中 5 例），且反馈组合 G+E+P 最强：DeepSeek-R1 在 Level 2 从 one-shot 的 36% 升到 72%（图 6），L1 12%→43%、L3 2%→18%。纯正确率（fast_0，表 9）用 E 后 R1 在 L1/L2 超 90%。重复采样的例子：DeepSeek-V3 L2 从 4%（one-shot）到 37%（k=100），但若模型对某类任务（34 个卷积变体）内在概率过低，采样再多也救不回来。
-  - 失败模式归因（图 2）：执行失败（编译/越界/运行错误）vs 功能不正确（shape/value 错）。推理模型（o1、R1）执行失败明显更少（总错误 <55% vs 其他 >70%），但**所有模型在功能正确性上同样挣扎**。作者归因于 CUDA 是低资源语言——在 The Stack v1.2 里只占 0.073%。
-  - 有意思的内核（第 6 节）：13x 的 diag-matmul（Claude，把对角线矩阵乘改为按行缩放，纯算法优化）；2.9x 的 GELU 融合（DeepSeek-V3，含常数折叠）；2.8x 的 cosine similarity（o1，用共享内存做规约）；2.6x 的 matmul+divide+sum+scale 融合（Sonnet）。但从未出现可用的 tensor core 指令。
-  - 跨硬件（表 14/图 8-9）：one-shot 内核不跨硬件泛化，R1 在 L2 的 fast1 是 L40S 36% vs A10G 47%。提供硬件规格（TFLOPS/带宽）在上下文中帮助有限；few-shot 示范（融合/tiling/FlashAttention）反而降低整体 fast1（模型更激进 → 更多执行失败），但在正确子集里 o1 对 77% 的 GEMM 应用了 tiling。
-  - 评测系统（附录 H）：三段流水线（并行生成 → CPU 上 nvcc 预编译缓存 → GPU 上单核逐一计时）；迭代实验用"GPU orchestrator + 有限状态机 + 信号量抢 GPU"，还有可视化轨迹的 UI。
-- **关键实验结论**：one-shot 下最强推理模型也只匹配 PyTorch 基线 <20%；迭代反馈（E+P）把 R1 的 L2 fast1 从 36% 拉到 72%；重复采样和迭代都比 one-shot 强，但天花板由基座模型决定。benchmark 设计上"把 p 调高就变难"的特性，让它可以随模型进步持续演化。
-- **与课程主题的关系**：本讲第二块砖——示范"为评测设计环境"如何驱动 agent 系统设计。KernelBench 的回环（生成→编译→执行→profiler 反馈→再生成）就是 SWE-agent 循环在"性能优化"这一目标下的特例；fast_p 展示了如何把"多目标（正确+快）"压成一个标量指标。也点出 Agent 的真实瓶颈往往不在"想得对不对"而在"数据稀缺"（CUDA 语料 0.073%）。
-- **可演示的代码点**：用 numpy 实现 fast_p 并画 p 从 0 升高时的正确+加速曲线；CPU 上做一个"伪 kernel 评测"（对比逐算子实现 vs 融合实现的计时与正确性，感受融合收益）；搭一个模拟"生成→编译错误反馈→再生成"的迭代循环，观察 fast1@N 随轮次上升；模拟 repeated sampling 的覆盖率曲线。
+- **核心思想**：把几何证明拆成**神经-符号两段式**。符号引擎 DDAR 负责确定性推理——组合 Deductive Database（DD，Horn 子句式演绎规则，如"等腰三角形两底角相等"）与 Algebraic Reasoning（AR，解角度/比例/距离方程）。但 DDAR 有一个致命短板：面对需要**辅助构造（auxiliary constructions）**的题会彻底卡死。AlphaGeometry 用一个 150M 参数的 decoder-only transformer（JAX + beam search）在 DDAR 卡住时**提议下一步加什么辅助点/辅助线**，然后交给 DDAR 继续推。辅助构造等价于"生成外部项"，是解竞赛几何题最难的认知动作，也是整个系统"用学习补符号引擎之不足"的关键。
 
-### 论文 3：On the Need to Align Intent and Implementation in Uncertainty Quantification（arXiv:2506.03037，agent-system-interfaces.pdf）
-- **⚠️ 文件问题**：`papers/lecture-13/agent-system-interfaces.pdf` 里的实际内容不是本讲预期的 "Improving Parallel Program Performance with LLM Optimizers via Agent-System Interfaces"。那个真正对应 Agent-System 接口设计的论文 arXiv 编号应为 **2410.15625**（Wei, Nie, Teixeira, Yadav, Lee, Wang, Aiken，ICML 2025，斯坦福）。本 PDF 装的是另一篇立场论文：Trivedi & Nord（Fermilab/芝加哥大学）的 *On the Need to Align Intent and Implementation in Uncertainty Quantification for Machine Learning*。**写 notebook 时若要覆盖 "Agent-System 接口设计" 一节，请重新下载 2410.15625**；以下对实际文件内容的笔记仍值得保留，因为它把 "intent 与 implementation 对齐" 这个主题做了可迁移的剖析。
-- **核心思想**：立场论文，论证"量化的不确定性必须锚定在它的推理目标上"。核心病态叫 **construct drift**：不确定度是为 A 算出来的，却被拿来支撑关于 B 的结论（例如把"模型输出的方差"当作"模型不知道什么"）。作者给出一个诊断框架：先分类"估计目标"（在估计什么），再分类"不确定性构造"（用什么逻辑表达不确定），然后要求二者通过一条"认识论契约"（epistemic contract）对齐，并用三根"可信轴"来检验。
 - **关键公式/算法**：
-  - 估计目标分类（六种）：estimation（纯数值摘要，无承诺）、prediction（预测未来可观测值）、inference（恢复潜在参数 θ）、predictive inference（对未来观测做无模型覆盖保证，如 conformal）、indirect inference（无似然时用辅助统计量）、simulation-based inference（SBI，用模拟器替代似然，NPE/NLE/NRE）。
-  - 不确定性构造家族（四种，各对应一种概率解释）：frequentist（长期重复保证，如置信区间、conformal 集）、Bayesian（信念一致更新，credible 区域）、fiducial/hybrid（Fisher，从数据生成机制导出分布）、logical probability（Keynes/Carnap，证据到假设的蕴含度）。
-  - 认识论契约（表 2）：目标 → warrant（正当性）→ 构造。例：prediction → 长期覆盖 → conformal 集；parameter inference → 信念一致性 → credible 区域；SBI 参数 → 学习到的近似 → NPE 后验。
-  - 三根可信轴（第 5 节）：①formal guarantees（有没有理论保证：覆盖定理、后验一致性）；②empirical reliability（实践中是否成立：SBC、posterior predictive checks、校准曲线）；③model correspondence（是否尊重领域结构：对称性、守恒律、因果）。三根轴不可互换——一个方法可能覆盖有效、benchmark 好看，却完全无视物理结构。
-  - SBI checklist（把三根轴落实到模拟推断）：theory check（方法声称保证什么）、forward checks（后验经模拟器采样能否重现观测数据分布）、inverse checks（能否从模拟数据找回已知参数，检验可辨识性与校准）、degeneracy mapping（参数空间是否有观测等价方向）、global structure comprehension（联合分布 p(θ,x) 的全面检查）。
-  - 典型错位案例（第 6 节，每条对应违反哪根轴）：把 deep ensemble 的跨模型方差当"epistemic uncertainty"（无校准保证，违反轴 1&2）；conformal 区间只保证 marginal coverage 但缺少领域本体（违反轴 2&3）；NRE 在快速代理模拟器上训练导致过自信后验、覆盖差（Delaunoy et al.，违反轴 1&3）；对同一检测同时报 frequentist p 值与 Bayesian credible 区域引起"矛盾"假象（warrant 混淆）；conformal 在亚群上失效（校准了覆盖却没校准解释力）。
-  - 建议（第 7 节）：显式声明推理链（目标/损失/构造/warrant）、按用途选构造、同时做前向与逆向校验、不要混用构造（prediction interval ≠ credible region）、用模拟器当测试仪器、超越 i.i.d. 评测、研究模型稳定性、跨学科澄清术语。
-- **关键实验结论**：这是一篇立场论文，无实验曲线；最有价值的产出是诊断清单（表 3 的 cross-cutting diagnostics：marginal coverage、conditional coverage、sharpness、OOD 行为、aleatoric/epistemic 分离、composability、decision alignment 等）和"先声明推理链再做宣称"的可操作纪律。
-- **与课程主题的关系**：这是本讲第三块的**概念基座**。它虽然讲的是统计不确定性，但骨架完全可以平移到 agent-system 接口设计：Agent 的"意图"（想做什么、声称什么）必须与系统的"实现语义"（实际上怎么执行、报什么数）对齐，否则就会发生工程版的 construct drift——例如 Agent 把测试通过率当"修复成功"、把覆盖率当"正确率"。2410.15625 正是把同一句"对齐 intent 与 implementation"落实到系统层：给 LLM 优化器一个 DSL（把映射决策显式化成可搜索空间）加一个 AutoGuide（把原始执行输出翻译成可行动的自然语言反馈），而不是让模型直接面对 C++ 裸系统。这也呼应 L17（Agent 评测）：评测指标本身也是一种"接口"，指标定义错了，系统再好也白搭。
-- **可演示的代码点**：用合成数据演示"方差不是不确定性"（跨模型方差没有覆盖保证）；写一个迷你 conformal-style 校准检查对比原始 std 与校准后的区间覆盖率；把"declare the inference chain"做成一个模板函数，让学生给自己的 mock 评测声明目标与指标。
+  - **数据合成**：从约 10 亿个随机定理前提采样，用符号引擎生成约 1 亿条合成定理与证明（许多证明 >200 步，是平均竞赛证明的 4 倍长）。LM 先在合成数据上预训练，再在约 900 万条需要辅助构造的证明（约占 9%）上微调——这样模型学到的是"什么情况下该加什么构造"。
+  - **推理**：训练好的 LM 提供辅助构造候选，DDAR 验证并推进；反复迭代直到证出。公开复现参数：`BATCH_SIZE=32, BEAM_SIZE=512, DEPTH=16`。
+  - **硬件**：4 张 V100 + 250 CPU workers（为满足 IMO 时限）。
 
-> 注：真正对应本讲 OUTLINE 第 3 节"Agent-System 接口设计"的论文（arXiv:2410.15625，正确文件缺失）要点速记，供重下载后参考：框架名 **Agent-System Interface (ASI)**，由 DSL + AutoGuide 两部分组成。DSL 把任务到处理器/数据到存储的"mapper"编写从 C++ 变成声明式，代码量平均缩小约 14x，并显式定义可搜索的结构化搜索空间；AutoGuide 把原始执行输出（如 "assertion failed: stride mismatch"）翻译成可行动建议（"内存布局不对，调整 layout 约束"）。结果：10 次迭代的生成式优化器就超过跑了 1000 次迭代的 OpenTuner（快 3.8x；同样 10 次则快 11x）；在 9 个基准（Circuit/Stencil/Pennant + 6 种 matmul 算法）上相对专家 mapper 最高 1.34x 加速；调优时间从数天降到约 10 分钟；消融显示 DSL 单次生成成功率 80%（C++ 为 0%），完整反馈（执行+解释+建议）显著优于任何降级反馈。
+- **关键实验结论**：
+  - IMO-AG-30（30 道历史 IMO 几何题）解出 **25/30**；DDAR 单独只有 14，此前最好的 Wu 氏方法只有 10，接近平均金牌水平。
+  - jgex_ag_231 上从 198 提到 228。
+  - 输出**人类可读的证明**，解出 IMO 2000 与 2015 全部几何题；还发现 IMO 2004 一道定理的推广（找出了证明中未用到的前提）。
+
+- **与课程主题的关系**：这是本讲"神经-符号结合"的第一块基石——**神经网络负责"提议"（产生候选步骤），符号引擎负责"验证"（确定性推理与搜索）**。它直接呼应 L03 的答案验证：这里的验证器是形式的、可靠的，模型永远不能"糊弄"它。它也是后面 AlphaProof 的结构前身：同样的"模型提候选 + 可靠验证器把关"，只是把符号引擎换成了形式化证明系统。
+
+- **可演示的代码点**：
+  - 用 Python 手写一个**单步演绎规则**（如角度相等、三角形全等判据）构成的迷你符号引擎，从已知条件一步步推出新事实。
+  - 演示"辅助构造"：同一个几何配置，不加辅助点 vs 加一个辅助点，能推出的结论数量差异——用小枚举直观看到"卡住"与"解锁"。
+
+### 论文 2：AlphaProof / AlphaGeometry 2 — DeepMind 博客（"AI achieves silver-medal standard solving International Mathematical Olympiad problems"，2024-07-25；材料 alphaproof-blog.md；技术细节随后发表在 Nature，2025，DOI:10.1038/s41586-025-09833-y）
+
+- **核心思想**：AlphaProof 把**数学证明当成一个游戏**，用 AlphaZero 式强化学习在 Lean 形式证明助手里搜索证明。形式语言 Lean 的好处是**推理过程可被机器逐行验证**——验证器绝对可靠，这同时解决了两个问题：可验证性（不会有幻觉）和训练信号（每个被验证的证明都是可用的监督/奖励信号）。瓶颈是人类手写的形式化数据极少；解决办法是用 Gemini 微调出一个**形式化器（auto-formalizer）**，把自然语言问题自动翻译成形式化陈述，构建约 100 万道不同难度题目的大型题库，让系统在难题上"自对弈"地自我强化。
+
+- **关键公式/算法**（结合 Nature 2025 全文细节）：
+  - **训练管线**：约 1 亿道非正式问题 → Gemini 形式化器翻译成形式语言（约 100 万道源题扩成约 8000 万个形式化命题）→ 求解器网络在 Lean 中搜索证明或反例 → AlphaZero 逐步自我强化，题目难度递增。预训练约 300B tokens 的数学与代码文本，再在 Mathlib 约 30 万条人类证明上监督微调。
+  - **证明网络**：约 3B 参数的 encoder-decoder transformer，读当前证明状态，输出两样东西：接下来尝试哪个 tactic，以及"还剩多少步"的估计（用于智能分配搜索算力）。搜索用 AlphaZero 启发的树搜索，含 **AND-OR 树**（分解相互独立的子目标）与 **progressive sampling**（关键路径上更广的 tactic 探索）。
+  - **训练成本**：主 RL 阶段约 8 万 TPU-days，形式化本身约 10 万 TPU-days（这就是"没有大规模训练就别想复现"的部分）。
+  - **TTRL（test-time reinforcement learning，测试时强化学习）**——针对超级难题的关键创新：对目标题用 Gemini（few-shot + 最多 15 轮进化）**自生成约 40 万个变体**（简化、推广、类比、程序化修改假设/目标），在这个变体集上跑一个专用的 AlphaZero 式 RL 循环，训练一个"专家"模型积累解题所需的洞察。单次 TTRL 运行要 2-3 天算力，远超人类 4.5 小时时限，但它是破解 IMO 2024 第 6 题（全场只有 5 名选手解出）的关键。
+  - **AlphaGeometry 2**：前代大升级——语言模型从零训练、合成数据多一个数量级、符号引擎快两个数量级，加**知识共享**机制（组合不同搜索树解决更难问题），能处理对象运动、角度/比例/距离方程等难题。赛前可解过去 25 年 83% 的 IMO 历史几何题（前代 53%）。
+
+- **关键实验结论**：
+  - IMO 2024：6 题解出 4 题（AlphaProof 2 道代数 + 1 道数论；AlphaGeometry 2 1 道几何），共 **28/42 = 银牌**（金牌线 29 分，609 人中 58 人达到）。最难的 1 题仅 5 名人类选手解出，AlphaProof 也解决了。成绩由 Fields 奖得主 Timothy Gowers 等按 IMO 规则评定。
+  - 解题时间从几分钟到最长三天（人类是两场 4.5 小时）。
+  - 形式化基准：修正后的 miniF2F 测试集上 **96.3%**（最小搜索）/ **99.6%**（TTRL）；新基准 formal-imo（258 道历史非几何 IMO 题）58.3%；PutnamBench-test 56.1%。
+  - 已知局限：依赖演进中的 Lean 生态（Mathlib）；难处理"自定义新概念"的题；组合题基本解不了；部分竞赛题仍需人工翻译成 Lean；算力巨大（核心团队约 10 人，变体生成法由 IMO 金牌得主 Miklós Horváth 设计）。
+
+- **与课程主题的关系**：这一篇是整讲的中枢，把"验证器 + 搜索 + 强化学习"三条线拧成一股：验证器在这里是**形式的、可靠的 Lean 检查器**（再次区别于 LLM-as-judge）；搜索是 AlphaZero 式的证明树搜索（与 L08 的 AlphaCode 生成-过滤-聚类同构：海量候选 + 可靠筛选）；RL 是自我对弈式的迭代改进（与 L07 开放进化一脉相承）。TTRL 则把"推理时多花计算"（L02）推到极端——连**训练**都搬到测试时为单题进行。
+
+- **可演示的代码点**：
+  - 用 Python 写一个**最小自然演绎验证器**（命题逻辑的几条推理规则），演示"形式化证明的每一步都可被机器检查"。
+  - 实现一个**搜索 + 验证器**的抽象循环：候选证明步骤生成 → 验证器检查 → 通过则推进 / 失败则回溯，复现 AlphaProof 的搜索骨架（用小搜索空间，不碰真实 Lean）。
+
+### 论文 3：Gemini Deep Think 拿下 IMO 2025 金牌（DeepMind 博客，2025-07；"Advanced version of Gemini with Deep Think officially achieves gold-medal standard at the International Mathematical Olympiad"）
+
+- **核心思想**：**完全放弃形式化，走纯自然语言端到端路线。** Gemini Deep Think 直接读官方题面，用自然语言写出严谨证明，**在 4.5 小时的比赛时限内**完成，拿下 **35/42 分（6 题做对 5 题）**，达到金牌线。成绩由 IMO 协调员按与人类选手完全相同的标准**官方认证**（DeepMind 是首批拿到官方认证的 AI 队列之一），IMO 主席 Gregor Dolinar 证实："35 分——金牌分数，解法清晰精确、大多容易跟上。"
+
+- **关键算法/做法**：
+  - **训练**：新的强化学习技术，利用多步推理、解题、定理证明数据，外加精选的高质量数学解集与 IMO 特定提示（hints）。
+  - **平行思考（parallel thinking）**：同时探索并组合多条可能解题路径，而不是沿单条线性思维链走到底——相当于把"搜索/分叉"内化进解码过程。
+  - **对比 2024**：IMO 2024 的 28/42（银牌）要靠形式化翻译 + 2-3 天算力；2025 的 35/42（金牌）在时限内纯自然语言完成。这是同一位嘉宾两条技术路线的合流。
+
+- **关键实验结论与轶事**：
+  - 唯一没做对的第 6 题恰是全场最难（只有 5 名人类选手解出），模型从错误假设起步。
+  - 一道数论题上，模型给出了优雅的初等数论证明，而许多人类选手用研究生级的 Dirichlet 定理。
+  - 后续进展（2026-02 报道）：该方向已推进到**研究级数学**——名为 Aletheia 的研究智能体已自动解决开放问题，在 IMO-ProofBench Advanced 上拿到约 90%，并贡献了多篇论文。
+  - 一个制度性细节：同期 OpenAI 声称的"金牌水平"由它自聘的前 IMO 奖牌得主评分，未经 IMO 官方认证；Thang Luong 对此表示"没走那个流程的结果，可能差一分就是银牌"。
+
+- **与课程主题的关系**：这一篇是"超级人类推理"叙事的**当下顶点**，回答"神经-符号之外还有没有更简单的路"：当 LLM + RL 足够强，也许不需要形式化这层保险也能给出可信、可评分的数学证明。它与前两篇形成方法论对照——**形式验证路线（可靠但贵、慢）vs 纯自然语言 RL 路线（快、通用，但验证仍是开放问题）**。对 Agent 课程的意义：数学仍是试金石，但"可靠验证"这个 Agent 核心能力，在两个路线里形态完全不同。
 
 ## 教学主线（想象 Stanford 老师会怎么教）
 
-按"真实任务 → 拆解 → 评测 → 接口"组织，三篇论文是同一个 SWE 故事的四步：
+1. **数学为什么是推理的试金石。** 先给失败案例：让一个普通 LLM 直接做一道 IMO 题，输出一段"看起来很有道理"的证明，其实有个隐藏漏洞——因为自然语言数学**没有机器可检查的验证器**，错也难发现。由此定义两件事：数学的**可验证性**（答案对错客观可判）与**奖励稀疏性**（要么满分要么零分，中间没有渐进信号）。引出本讲要解决的两难：怎么在"证明空间巨大、信号极稀疏"的环境里找到一条正确路径。老师的类比：数学竞赛像一个由"绝对公正且永不犯错"的裁判判分的考试，而普通对话任务没有这样的裁判。
 
-1. **先立靶子：SWE-bench 与 test-time compute 的相遇**。回顾 L2 的结论——LLM Monkey 工作发现 coverage 随采样数 log-linear 增长，但"能采到正确解"不等于"能提交正确解"。抛出一个刺眼数字：CodeMonkeys 随机选择只有 45.8%，oracle 选择（即 coverage）69.8%——正确解生成了，却选不出来。这就是 SWE 版"生成-验证差距"（呼应 L3）。这里给出本讲脚手架：把修 issue 切成**找上下文 → 生成候选 → 选择答案**。
-2. **CodeMonkeys：怎么把 test-time compute 真正吃进系统**。逐段讲：①上下文（因为要采样 10 条轨迹，逐文件扫描的成本被摊薄，朴素方法反而划算，这是"为 test-time compute 反推设计"的第一个例子）；②生成（两个背靠背状态机：先单独迭代出测试，再让编辑与测试互相纠错，强调"测试要在未编辑库上失败、编辑后通过"的两侧调试）；③选择（多数投票 vs 模型选择 vs 选择状态机，逐步逼近 oracle）。**读者容易卡住的地方**：串行缩放（更多迭代）与并行缩放（更多轨迹）到底差在哪——用图 5 的"前沿曲线"讲：同预算下 coverage 相近，但并行会让选择变难、串行会撞上"模型错误批准"的天花板。
-3. **KernelBench：把"对"和"快"同时考**。老师会问一个反问式的问题：CodeMonkeys 的评测是二元的（修好/没修好），但如果任务的目标是"性能"呢？引出 fast_p：一个标量同时编码正确性和加速比，p 是旋钮。先给打击性的 one-shot 结果（前沿模型 <20% 快于 PyTorch），再给解法：执行反馈 E + profiler 反馈 P 的迭代让 R1 的 L2 从 36%→72%。**读者容易卡住的地方**：为什么单纯加执行反馈（E）效果显著，再加 profiler（P）只在部分模型有用——因为"正确性反馈不如编译错误那么有信息量"，模型能不能消化 profiler 输出取决于基座。可以放一段真实的 wmma 内核（图 10）展示"模型会尝试它没吃透的硬件指令"。
-4. **Agent-System 接口：意图要与实现对齐**。从 UQ 论文借概念：construct drift = 为 A 算的不确定度被拿来支撑关于 B 的结论。平移到系统层：Agent 的意图（声称修好了、声称变快了）必须与系统的实现语义（测试怎么判、计时怎么计）对齐，否则指标漂移。真正的 ASI 论文（2410.15625）给出落地方案：用 DSL 把"映射决策"显式化成一个可搜索空间、用 AutoGuide 把原始执行输出翻译成可行动建议——接口是 Agent 与系统之间的一层"翻译契约"。
-5. **收尾与预告**：一条轴串起整讲——真实任务的 agent 系统 = 上下文检索 + 修复循环 + 选择器 + 面向目标的评测接口；并预告 L14（记忆：Cartridges/MemGPT 解决上下文管理）、L17（评测：SWE-bench 系列与长程任务评测）。
+2. **AlphaGeometry：神经-符号结合的第一次成功。** 先讲符号引擎 DDAR 能做什么（确定性演绎：DD 规则 + AR 代数），再展示它卡在哪里——**辅助构造**。手算/可视化一个例子：不加辅助点的配置推不动，加上"连接某两点的线段"后立刻能推出全等三角形。由此引入本讲第一个可复用模式：**神经网络提议候选（辅助构造/下一步），符号引擎确定性验证并推进**。数据合成部分讲清"为什么要 1 亿条合成定理"——人类证明太少，只能让符号引擎自己造训练数据。卡点预警：读者容易混淆"LM 输出一段推理"与"LM 提议一个构造、由引擎来推"——前者没有验证器，后者每一步都被引擎保证。
 
-关键对照表（可用于 notebook 的总结 cell）：
+3. **AlphaProof：把证明变成游戏。** 从 AlphaGeometry 的局限（只覆盖几何、符号引擎写死了领域）出发，引入形式语言 Lean：它把"任意数学命题 + 证明"变成机器可逐行检查的对象。于是数学证明 = AlphaZero 的棋盘游戏：当前证明状态是局面、tactic 是动作、Lean 检查器是规则。讲清**形式化器的瓶颈与解法**：人类形式化数据太少 → Gemini 自动把自然语言问题翻译成形式化命题 → 造出千万量级的题库 → 系统在难题上自我对弈。再讲 TTRL：面对超级难题，连训练都搬到测试时——针对单题自生成 40 万个变体练一个"专家"，这是 IMO 2024 最难一题的解法。卡点预警：读者常误以为 AlphaProof 是"一个训练好的模型直接输出证明"，实际是"模型 + 大规模搜索 + 测试时 RL 三件套"；也容易把"自然语言数学"和"形式化数学"混为一谈——前者验证靠人、后者验证靠机器。
 
-| 论文 | 解决什么 | 核心机制 | 关键指标 | 一句话工程启示 |
-|---|---|---|---|---|
-| CodeMonkeys | 修真实 GitHub issue | 串行状态机修复 + 并行采样 + 选择状态机 | 57.4%（oracle 69.8%） | 上下文成本靠并行摊薄，选择决定一切 |
-| KernelBench | 写高效 GPU 内核 | 生成-编译-执行-profiler 反馈环 | fast_p；R1 L2 36%→72% | 评测接口（正确+加速）反推系统设计 |
-| UQ 立场论文 | 对齐不确定度的意图与实现 | 目标×构造×可信轴诊断框架 | 无实验；诊断清单 | 声明推理链，防止指标漂移 |
-| (ASI 2410.15625) | Agent 优化并行程序 | DSL + AutoGuide | 10 迭代超 OpenTuner 千迭代 | 接口把系统语义翻译成 Agent 能用的形式 |
+4. **IMO 2025 金牌：Gemini 的路线。** 把镜头拉回当下：不需要形式化，纯自然语言 + 强化学习 + 平行思考，在 4.5 小时内拿到官方认证的金牌。与 2024 年对比（28 分、2-3 天、需要翻译成 Lean），讲清两条路线各自的取舍——**形式验证路线追求"绝对可靠"，自然语言 RL 路线追求"又快又通用"**。收尾把三篇串成一条"迈向超级人类推理"的演进线：符号引擎 → 神经-符号 → 形式化 + RL → 纯自然语言，并指出数学作为 Agent 试金石的意义：任何想在推理上变强的 Agent，都可以用"可验证的数学任务"当训练与评测的靶场（呼应 L12 的推理模型，也为 L15 自治智能体埋下"可靠性"的伏笔）。
 
-## 代码演示点子（3-6 个）
+## 代码演示点子（4-6 个）
 
-1. **迷你 SWE 修复循环（串行 test-time compute）**：从零实现一个最简状态机——循环体是"LLM 生成编辑 + 测试脚本 → 在 mock 代码库上跑测试 → 拿 exit code/输出当反馈 → 再生成"，直到模型批准或达到迭代上限。用 `llm_client.py` 的 mock 分支提供脚本化的"越来越好的编辑"，跟踪每轮测试通过情况。期望输出：一个能可视化"迭代次数 × 修复质量"的曲线，体现串行缩放收益递减（前几次迭代收益最大，对应论文图 5）。
-2. **并行采样覆盖率曲线**：给定每题的"单次采样成功概率"（合成数据，难度各异），实现 coverage = 1 − ∏(1 − p_i)，画"采样数 N 对覆盖率"的 log-linear 曲线；再加一个串行+并行的预算分配版（把总预算 B 分成 B_serial 轮 × B_parallel 条），验证"同预算不同分配 coverage 相近"。期望输出：复现 LLM Monkeys / CodeMonkeys 图 5 的直觉。
-3. **三种选择器对比（test 投票 / 模型选择 / 选择状态机）**：合成一批候选编辑（每个带隐藏的正确性标签 + 一批生成测试的通过情况），实现"测试多数投票"、"直接模型选择"、"先过滤 top-3 再选择"，比较各自的分数与 oracle（coverage）之差。期望输出：选择状态机 + 过滤 > 纯投票 > 随机，量化"选择回收了随机与 oracle 之间多少差距"。
-4. **fast_p 与加速比分布**：用 numpy 造一批"候选内核"（每个带 `is_correct` 和 `speedup`），实现 fast_p 公式并画 p 从 0 到 2 的下降曲线；再用一个简化版"正确性检查"（随机输入对输出容差）说明 5 组随机输入怎么近似判定正确。期望输出：fast_0 = 纯正确率、fast_1 = 达标率、p 越高越难，直观展示"阈值是旋钮"。
-5. **CPU 上的融合演示（伪 KernelBench）**：选一个简单算子序列（如 `matmul → ReLU → sum(dim=1)`），分别用 numpy 的逐算子写法与手工融合写法实现，计时并断言数值一致。期望输出：融合版更快的量级对比，让学生不用 GPU 也能体会 KernelBench Level 2 的"融合"动机。**实验语料**：固定 seed、固定形状、多次计时取中位数。
-6. **意图-实现对齐：方差不是不确定性**：合成一个简单回归任务，训练（或模拟）多个模型，对比两种"不确定性"：①跨模型输出的方差（deep ensemble 的常见做法）；②一个带边际覆盖保证的校准区间。在留出集上计算方差解释不了多少真实误差、而校准区间有近似名义覆盖。期望输出：一张"覆盖 vs 名义水平"的校准曲线，直观演示 construct drift（呼应 UQ 论文的三根可信轴）。
+1. **迷你几何符号引擎的单步推理**：用 Python 手写 3-5 条几何演绎规则（如"等腰三角形两底角相等""三角形内角和 180°""全等三角形对应边相等"），输入一组已知条件（已知角/线段关系），循环套规则直到没有新事实可推。期望输出：按步打印"从 X 推出 Y（依据规则 Z）"，以及推导深度。用 `torch.manual_seed(42)` 保证可复现。
+
+2. **辅助构造解锁推导**：同一个几何配置，构造"辅助点/辅助线"这一外部项的两种版本（不加 vs 加一个点并声明一个边关系），对比能推出的结论集合大小。直观看到"卡住 vs 解锁"，并点出辅助构造 ≈ 搜索中生成外部项。期望输出：两组结论集合 + 数量对比，加辅助点后多推出 1-2 个关键事实。
+
+3. **最小自然演绎验证器（形式化证明的最小示例）**：用 Python 实现命题逻辑的几条第 0 阶推理规则（合取引入/消除、蕴含消去 modus ponens、反证法），写一个 `verify(proof)` 逐行检查每一步是否由前面某几行按合法规则得出。期望输出：合法证明通过、人为加入一行非法步骤时报错并指出行号。这个演示强调"形式化 = 每一步可被机器检查"，对比 LLM 自然语言论证。
+
+4. **搜索 + 验证器的抽象框架**：实现一个通用的 search-and-verify 循环——`Generator`（从当前状态生成候选下一步，可用规则穷举或用 `llm_client`）+ `Verifier`（检查候选是否合法/是否推进）+ 简单的 DFS/BFS 或 beam。用它解一个小目标（如"从一组公理推导出一个目标命题"），复现 AlphaProof 的搜索骨架（候选 → 验证 → 推进 → 回溯）。期望输出：搜索树路径、访问节点数、找到合法证明所用的步数。
+
+5. **用 llm_client 让 LLM 做一步证明 + 手动验证**：用 `get_llm(force_mock=True)`（mock 模式输出脚本化占位）让 LLM 为一小题生成证明步骤，再把每一步喂给演示 3 的验证器，展示"**LLM 提出候选、可靠验证器把关**"的神经-符号分工。mock 输出要能被解析：让 mock 输出带上 `STEP: ... RULE: ...` 标记，验证器能逐行消化。期望输出：逐行验证通过/失败的报告，注明 mock 模式输出为占位。
+
+6. **形式化 vs 自然语言的小对照**：同一道题，把 LLM 的自然语言答案与"逐步形式化 + 机器验证"的版本并排，统计"自然语言看着对但形式化验证失败"的例子（mock 里给脚本化结果）。期望输出：一个对照表格 + 结论"可验证性是把含糊论证挡在门外的手段"。
 
 ## 作业点子（3 个）
 
-1. **覆盖率与采样数**：给定每题单次采样成功概率 `p` 与采样数 `n`，填空实现 coverage 公式。`assert abs(coverage(0.2, 10) - (1 - 0.8**10)) < 1e-9`、`assert coverage(0.2, 100) > coverage(0.2, 10)`。小提示：覆盖率 = 至少一条成功的概率 = 1 − 全部失败的概率；题目之间假设独立。
-2. **fast_p 计算**：给定候选列表（每项 `(is_correct, speedup)`），填空实现 `fast_p(candidates, p)`。`assert fast_p(cands, 0) == 正确条数/总数`、`assert fast_p(cands, 1) <= fast_p(cands, 0.5)`。小提示：把"正确"与"speedup > p"两个条件用 and 组合再取均值。
-3. **用测试做多数投票的选择器**：给定一个 `passes` 布尔矩阵（行=生成测试，列=候选编辑），填空实现"选出通过测试最多的编辑，平手时选 diff 最短的"。`assert select(passes, lengths) == 期望的下标`。小提示：`passes.sum(axis=0)` 是每列通过数；平手时在通过数最大的一组里按 `lengths` 取最小。
+1. **实现一条演绎规则的验证**：考察"验证器"逻辑。给一个简单的证明（含若干行：前提/结论 + 规则名）和一个规则库，写 `check_line(proof, i)` 判断第 i 行是否由之前某几行按规则合法推出；补全后 assert 检查：合法证明全部通过、人为把某行前提改错后该行被判定非法。小提示：先解析第 i 行的前提行号，再对照规则库匹配。
+
+2. **实现搜索-验证循环找到一条证明**：考察"搜索 + 验证器"框架。给定一组公理、一个目标命题、一个候选生成函数（返回所有可合法应用的规则实例），写 `find_proof(axioms, goal, max_depth)` 用 DFS 找一条证明路径；assert 检查：找到的证明每一步验证合法、且结论等于目标。小提示：维护"当前已知事实集合"，每步从中挑可应用规则。
+
+3. **LLM 证明与验证器协作**：考察"神经-符号分工"。给一段含 `STEP:.../RULE:...` 标记的 LLM 输出（mock 脚本化轨迹），写 `parse_steps(text)` 解析出步骤，再逐条用验证器检查；assert 检查：解析出的步骤数与标记对数一致、验证报告标出失败的步骤号。小提示：用 `re.findall` 按标记切分，逐行喂给作业 1 的验证器。
 
 ## 参考资料
 
-- Ehrlich et al., *CodeMonkeys: Scaling Test-Time Compute for Software Engineering*（arXiv:2501.14723）— 本讲第一主力；代码与轨迹在 scalingintelligence.stanford.edu/pubs/codemonkeys
-- Ouyang et al., *KernelBench: Can LLMs Write Efficient GPU Kernels?*（arXiv:2502.10517）— 本讲第二主力；框架开源（github.com/scaling-intelligence/KernelBench）
-- Trivedi & Nord, *On the Need to Align Intent and Implementation in Uncertainty Quantification for Machine Learning*（arXiv:2506.03037）— 实际装在本讲文件夹里的立场论文，intent/implementation 对齐的概念基座（⚠️ 与预期文件不符，见论文 3 开头说明）
-- Wei et al., *Improving Parallel Program Performance with LLM Optimizers via Agent-System Interfaces*（arXiv:2410.15625，ICML 2025）— 真正对应"Agent-System 接口设计"一节的论文（DSL + AutoGuide），**本讲缺此 PDF，写 notebook 前请重下载**
-- Jimenez et al., *SWE-bench: Can Language Models Resolve Real-World GitHub Issues?*（arXiv:2310.06770）— SWE-bench 基准本身；SWE-bench Verified 见 OpenAI 官方博客（2024-08）
-- Brown et al., *Large Language Monkeys: Scaling Inference Compute with Repeated Sampling*（arXiv:2407.21787）— CodeMonkeys 的直接前作，"coverage 随采样 log-linear 增长"的出处
-- Yang et al., *SWE-Agent: Agent-Computer Interfaces Enable Automated Software Engineering*（arXiv:2405.15793）— 另一个 SWE-agent 框架，强调 agent-computer 接口，与 L13 第 4 点互补
-- Xia et al., *Agentless: Demystifying LLM-based Software Engineering Agents*（arXiv:2407.01489）— 同样采用"定位-修复-验证"三段式，CodeMonkeys 的对照系
-- Tillet et al., *Triton: An Intermediate Language and Compiler for Tiled Neural Network Computations*（2019）— KernelBench 允许使用的高层内核语言之一
-- Dao et al., *FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness*（arXiv:2205.14135）— 论文反复引用的人类写高效内核标杆
+- AlphaGeometry: An Olympiad-level AI system for geometry（Nature 2024，DOI:10.1038/s41586-023-06747-5；GitHub 仓库 https://github.com/google-deepmind/alphageometry）— 神经-符号几何证明系统的原论文与开源代码。
+- AI achieves silver-medal standard solving International Mathematical Olympiad problems（DeepMind 博客，2024-07-25，https://deepmind.google/discover/blog/ai-solves-imo-problems-at-silver-medal-level/）— AlphaProof / AlphaGeometry 2 的 IMO 2024 成绩公告。
+- AlphaProof 技术全文（Nature 2025，DOI:10.1038/s41586-025-09833-y）— AlphaProof 的完整技术细节：证明网络、AND-OR 树搜索、自动形式化管线与 TTRL。
+- Advanced version of Gemini with Deep Think officially achieves gold-medal standard at the International Mathematical Olympiad（DeepMind 博客，2025-07，https://deepmind.google/blog/advanced-version-of-gemini-with-deep-think-officially-achieves-gold-medal-standard-at-the-international-mathematical-olympiad/）— Gemini Deep Think 拿下官方认证 IMO 2025 金牌。
+- The Lean Theorem Prover（https://lean-lang.org/）— AlphaProof 依赖的形式证明助手与依赖类型语言。
+- miniF2F（https://github.com/openai/miniF2F）— 488 道竞赛级定理的形式/非形式配对基准，评估定理证明器与自动形式化器。
+- LeanDojo（https://leandojo.org/）— 连接机器学习与 Lean 的开源工具包与基准，含 ReProver 检索增强证明器。
+- Hilbert: Recursively Building Formal Proofs with Informal Reasoning（ICLR 2026，https://mlanthology.org/iclr/2026/varambally2026iclr-hilbert/）— 用非形式推理递归构建形式证明，miniF2F 99.2%，是形式化路线的近期代表。
+- CS329A 课程大纲 Lecture 13（https://cs329a.stanford.edu/）— 本讲在课程地图中的定位（Part 4 Frontiers，嘉宾 Thang Luong）。

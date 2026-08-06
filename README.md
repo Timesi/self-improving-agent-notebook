@@ -85,8 +85,8 @@ Not 17 isolated topics — ideas get handed off:
 - **voting → verification → search** (L2 → L3 → L5): the score you vote with becomes the verifier that picks nodes in tree search
 - **verification → RL reward → fitness** (L3 → L6 → L7): the same verifier becomes the training signal, then the fitness in evolution
 - **sampling → search at scale** (L2 → L8): "ask many times" scaled to millions of candidates is AlphaCode
-- **the loop → embedded in a tree → called on code** (L4 → L5 → L13): one ReAct loop, three settings
-- **reward hacking → what eval guards against → Goodhart** (L7 → L17 → L20)
+- **the loop → embedded in a tree → called on code** (L4 → L5 → L10): one ReAct loop, three settings
+- **reward hacking → what eval guards against → Goodhart** (L7 → L14 → L17)
 
 ## What You Will Build
 
@@ -188,12 +188,12 @@ Self-Improving Agent Notebook
 │   ├── 08 Search & Deep Research
 │   └── 09 Post-training: from Chatbots to Agents
 │
-├── Part 3 · Agent Engineering (L13/14/17) # make it actually useful
+├── Part 3 · Agent Engineering (L10/14/17) # make it actually useful
 │   ├── 13 SWE Agents
 │   ├── 14 Agent Memory
 │   └── 17 Agent Evaluation
 │
-└── Part 4 · Frontiers (L15-L20)         # where the boundary is
+└── Part 4 · Frontiers (L12-L17)         # where the boundary is
     ├── 15 LLM Reasoning
     ├── 16 Mathematical Reasoning
     ├── 18 Autonomy
@@ -229,19 +229,19 @@ have no notebooks.
 
 | # | Notebook | Primary question | Implementation focus |
 |:---:|:---|:---|:---|
-| 13 | [SWE Agents](notebooks/part3-engineering/13-swe-agents.ipynb) | How do agents fix real code? | Coverage-selection, serial repair loop |
-| 14 | [Agent Memory](notebooks/part3-engineering/14-agent-memory.ipynb) | How do agents remember what they saw? | Hierarchical contexts, eviction, KV reuse |
-| 17 | [Agent Evaluation](notebooks/part3-engineering/17-agent-evaluation.ipynb) | How do we measure long-horizon agents? | Eval harness, win-rate, time horizon |
+| 13 | [SWE Agents](notebooks/part3-engineering/10-swe-agents.ipynb) | How do agents fix real code? | Coverage-selection, serial repair loop |
+| 14 | [Agent Memory](notebooks/part3-engineering/11-agent-memory.ipynb) | How do agents remember what they saw? | Hierarchical contexts, eviction, KV reuse |
+| 17 | [Agent Evaluation](notebooks/part3-engineering/14-agent-evaluation.ipynb) | How do we measure long-horizon agents? | Eval harness, win-rate, time horizon |
 
 ### Part 4 · Frontiers
 
 | # | Notebook | Primary question | Implementation focus |
 |:---:|:---|:---|:---|
-| 15 | [LLM Reasoning](notebooks/part4-frontiers/15-llm-reasoning.ipynb) | Where does reasoning ability come from? | CoT, self-consistency, emergent measures |
-| 16 | [Mathematical Reasoning](notebooks/part4-frontiers/16-alphaproof-math.ipynb) | How do verifiers + search prove theorems? | Symbolic engine, proof verifier, search |
-| 18 | [Autonomy](notebooks/part4-frontiers/18-autonomy-agents.ipynb) | What is missing between demo and autonomy? | Reliability, self-check retry, oversight |
-| 19 | [Multimodal Robotics](notebooks/part4-frontiers/19-multimodal-robotics.ipynb) | How do VLA models work? | Action tokenization, vocabulary masking |
-| 20 | [Future Research](notebooks/part4-frontiers/20-future-research.ipynb) | What is still unsolved? | Open problems, Goodhart, coordination |
+| 15 | [LLM Reasoning](notebooks/part4-frontiers/12-llm-reasoning.ipynb) | Where does reasoning ability come from? | CoT, self-consistency, emergent measures |
+| 16 | [Mathematical Reasoning](notebooks/part4-frontiers/13-alphaproof-math.ipynb) | How do verifiers + search prove theorems? | Symbolic engine, proof verifier, search |
+| 18 | [Autonomy](notebooks/part4-frontiers/15-autonomy-agents.ipynb) | What is missing between demo and autonomy? | Reliability, self-check retry, oversight |
+| 19 | [Multimodal Robotics](notebooks/part4-frontiers/16-multimodal-robotics.ipynb) | How do VLA models work? | Action tokenization, vocabulary masking |
+| 20 | [Future Research](notebooks/part4-frontiers/17-future-research.ipynb) | What is still unsolved? | Open problems, Goodhart, coordination |
 
 ## Quality Bar
 

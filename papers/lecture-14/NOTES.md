@@ -1,149 +1,123 @@
-# Lecture 14 — Augmenting Agents with Memory（给 Agent 加记忆）研读笔记
+# Lecture 14 — Agent 评测与长程任务 研读笔记
 
 > 本文件是 CS329A 第 14 讲的论文研读笔记，是编写对应 notebook 的素材。
 > 来源：https://cs329a.stanford.edu/（Autumn 2025 课程大纲）
 
 ## 课程主题
 
-这一讲要解决的核心问题是：**Agent 的上下文窗口是有限的，但任务（长对话、长文档、长期个性化）需要的信息是无限的。怎么办？**
+这一讲回答的问题：**怎样评测一个 Agent 才算靠谱？** 前面各讲教了怎么把 LLM 做成 Agent（循环、工具、规划、记忆、SWE 智能体），这一讲转向"度量学"：Agent 做的是多步、开放、时长不一的任务，传统 benchmark 的"选择题分数"既会快速饱和、又无法换算成对人类的价值。核心矛盾是：任务越真实，就越难自动打分；打分越省事（LLM judge），就越不可靠。
 
-位置安排：在 13 讲 SWE 智能体（agent 在长代码库/长 issue 里反复工作，强烈暴露 context 瓶颈）之后、17 讲评测之前，专门讲"记忆"。前三篇论文正好把"记忆"拆成三个互补的层面：
+全讲按三条线索层层递进：
+1. **从能力到任务时长**（METR）：用"人类完成该任务所需的时间"来给 Agent 能力标定标尺，得到可跨模型、跨年份比较的连续指标（time horizon）。
+2. **从任务时长到经济价值**（GDPval）：时长还不够，还要看"做的活儿值多少钱"——用真实职场任务、盲评 win rate 对比行业专家。
+3. **自动评测的可靠性与漏洞**（DeepScholar-Bench）：大规模评测必须自动打分（LLM judge），但 LLM judge 有位置偏差、自我偏好等漏洞，需要和人类打分校准。
 
-1. **MemGPT——记忆的分层组织（软件层/控制层）**：把 context window 当作稀缺内存，仿照操作系统的虚拟内存分页，用函数调用让 LLM 自己"换页"——把当前最相关的信息放在 main context，把旧信息逐出到外部存储，需要时再检索回来。
-2. **Cartridges——记忆的可学习压缩（表示层）**：与其决定"哪些文本放进 context"，不如把整篇语料蒸馏进一个离线训练的 KV cache（可学习参数）。这是把"记忆"从离散 token 变成连续向量表示，是 MemGPT 的"token 搬运"思路的另一种极致。
-3. **CacheBlend——记忆的跨请求复用（系统层/工程层）**：多个请求共享同一批文本 chunk 时，如何复用它们预计算好的 KV cache 而不损失质量。它处理"复用时的 cross-attention 丢失"问题，是让上述记忆机制真正跑得快起来的工程基础设施。
-
-一个贯穿性的直觉：**记忆不是"塞更多 token"，而是"用更聪明的存储/表示/复用，让有限 context 发挥无限能力"**。整讲从"软件控制"到"可学习表示"再到"系统复用"，构成一个从抽象到工程的三级台阶。
+三篇合在一起回答"评测 Agent 为什么难"：因为任务分布不再固定、成功判据不唯一、自动评分器的可靠性本身就是待测对象。
 
 ## 论文精读
 
-### 论文 1：MemGPT: Towards LLMs as Operating Systems（arxiv:2310.08560，memgpt.pdf）
-
-- **核心思想**：把 LLM 的固定 context window 类比为操作系统的"物理内存"，在它外面再加一层"磁盘"（外部存储），然后用 LLM 的函数调用能力实现"虚拟内存分页"——LLM 自己决定把哪些信息换入（main context）哪些换出（external context），从而在有限窗口上提供"无限上下文"的假象。系统被命名为 MemGPT（MemoryGPT），采用 OS 式的分层记忆架构，评估领域是长文档分析和多会话对话。
-
+### 论文 1：Measuring AI Ability to Complete Long Software Tasks（arxiv:2503.14499，measuring-long-tasks.pdf）
+- **核心思想**：现有 benchmark 只能给出"在某个固定题库上的得分"，无法回答"这个模型到底能做多复杂的真实工作"。METR 提出把 AI 能力翻译成人类时间单位：**X% 任务完成时间视野（time horizon）**——"AI 能以 X% 成功率完成、而人类专家通常需要 t 小时的任务"的 t。测量方法是：构造一套覆盖极宽难度（秒级到 8 小时）的 170 个软件/ML 任务 → 让人类专家和 AI Agent 分别做 → 记录人类耗时与 AI 成功率 → 拟合出每个模型对应 50% 成功率的时间视野 → 再按模型发布日期画成长曲线。核心发现：**前沿模型的 50% 时间视野自 2019 年起约每 7 个月翻一倍**（GPT-2 只有 2 秒，o3 约 110 分钟），且 2024 年后可能还在加速。按此趋势外推，AI 在 2028 年中到 2030 年中之间可能达到"一个月时长任务"的 50% 时间视野。
 - **关键公式/算法**：
-  - **两层记忆层级**：*main context*（类比 RAM，即 LLM 的 prompt tokens，推理时可见）与 *external context*（类比磁盘，在 context 之外，必须显式换入 main context 才能被推理使用）。
-  - **main context 分三段**（固定顺序、连续拼接）：
-    - *system instructions*：只读、静态，包含控制流说明、各记忆层级的用途、函数使用说明。
-    - *working context*：定长、可读写的一段非结构化文本，只能通过函数写；对话场景用来存用户关键事实、偏好、persona。
-    - *FIFO queue*：滚动消息历史（含用户/助手消息、系统消息、函数调用入参出参）；队列第一个 index 存一条"递归摘要"（对已逐出消息的递归总结）。
-  - **Queue Manager（队列管理器）**：新消息到达 → 追加进 FIFO queue → 拼接 prompt tokens → 触发 LLM 推理 → 把输入消息和生成输出写进 *recall storage*（消息数据库）。
-  - **逐出（eviction）策略**：当 prompt tokens 超过 *warning token count*（默认约 context 的 70%）时，向队列插入"内存压力"系统消息，提示 LLM 用函数把重要信息保存到 working context 或 *archival storage*；超过 *flush token count*（100%）时，flush 队列——逐出约 context 50% 的消息、用现有递归摘要+被逐消息生成新的递归摘要。被逐消息不再在 context 内可见，但永久存在 recall storage，可随时通过函数检索回来。
-  - **Function executor（函数执行器）**：解析 LLM 输出的 completion tokens 为函数调用，校验参数后执行，把结果（含运行时错误）回喂给 LLM。自定向的读写：函数 schema 与自然语言描述写进 system instructions，LLM 自主决定何时 append/replace 自己的 memory。典型函数：`working_context.append`、`working_context.replace`、`recall_storage.search`、`archival_storage.search`/`insert`。检索带分页（pagination），防止结果溢出窗口。
-  - **控制流 / 函数链（function chaining）**：事件（用户消息、系统消息、用户交互如"登录/上传完成"、定时事件）触发推理；LLM 可在输出里带 `request_heartbeat=true` 特殊参数，请求立即再做一次推理，从而串起多步检索；不带该 flag（yield）则暂停，等下一个外部事件。
-  - archival storage 用 PostgreSQL + pgvector（HNSW 索引）做向量检索（cosine），"检索器"天然从外部存储的 search 功能涌现出来。
-
+  - 成功概率的 logistic 模型（思想来自心理测量学 Item Response Theory 的 2PL，但难度直接用人类基线时长而非学出来的参数）：
+    $$p_{\text{success}}(\text{agent},\text{task}) = \sigma\!\big((\log h_{\text{agent}} - \log t_{\text{task}})\cdot \beta_{\text{agent}}\big)$$
+    其中 $t_{\text{task}}$ 为成功人类基线时长的几何平均，$h_{\text{agent}}$ 即 50% 时间视野，$\beta_{\text{agent}}$ 为斜率（每个 agent 一个参数）。对每个模型单独做 logistic 回归，任务按所属 family 用 $1/\sqrt{n}$ 加权（family 内任务相关性强，需降权保证多样性）。
+  - 趋势线：对 $\log(\text{horizon})$ 与 release date 做 OLS，斜率换算成翻倍天数；误差用三层层次 bootstrap（family→task→run，10000 次）估计。
+  - 任务套件：HCAST 97 个任务（1 分钟到 30 小时，46 个 family）+ RE-Bench 7 个 8 小时 ML 研究工程任务 + 新增 SW AA（Software Atomic Actions）66 个 1~30 秒的单步小任务（文件选择、告警分诊、请求路由、代码补全、心算），用于测 GPT-2/GPT-3 这类旧模型。
 - **关键实验结论**：
-  - **Deep Memory Retrieval（DMR，跨会话一致性）**：问及先前会话内容的窄答案问题。MemGPT 显著超过固定上下文基线：GPT-3.5 Turbo 38.7%→66.9%（ROUGE-L 0.394→0.629）；GPT-4 32.1%→92.5%（0.296→0.814）；GPT-4 Turbo 35.3%→93.4%（0.359→0.827）。基线能看到过去 5 段对话的"有损摘要"，MemGPT 则持有完整历史但只能分页检索。
-  - **Conversation Opener（engagement）**：开场的个性化程度。MemGPT 能接近甚至超过人类手写开场（SIM-H：Human 1.000，GPT-3.5 0.817，GPT-4 0.773，GPT-4 Turbo 0.767）。把信息存进 working context 是 key。
-  - **文档 QA（NaturalQuestions-Open）**：固定上下文基线的准确率被检索器性能"封顶"（只有塞进 context 的文档才可见），且随截断加剧而下降；MemGPT 不受检索文档数量影响，能反复查询 archival storage 并翻页，有效上下文不再受窗口限制。
-  - **Nested KV retrieval（多跳）**：140 对 UUID（约 8k tokens，即 GPT-4 的窗口大小），嵌套层数 0-4。GPT-3.5 在第 1 层嵌套就掉到 0%；GPT-4 / GPT-4 Turbo 到第 3 层掉到 0%；MemGPT+GPT-4 对嵌套层数不敏感（反复用函数查 main context 里的键值对）。
-  - 动机数字：context 很短（Table 1：Llama 2k、Llama 2 4k、GPT-4 发布时 8k、Claude 2 100k、GPT-4 Turbo 128k、Yi-34B-200k 200k），并且长上下文模型"只在开头和结尾记得好，中间丢失"（lost in the middle，引 Liu et al. 2023）。发布数据：扩充版 MSC、nested KV、20M 维基百科文章 embedding。
-
-- **与课程主题的关系**：本文给出"记忆"的第一个答案——**分层的、由 Agent 自己管理的记忆**。它定义了 agent 记忆的标准词汇表（main/external context、working memory、recall/archival storage、eviction、递归摘要、内存压力警告），是整讲的概念地基。它与课程先前的工具调用（L04）和 ReAct 循环（L05）自然衔接：函数调用从"操作外部世界"延伸到"操作自己的记忆"。
-
+  - 12 个前沿 + 4 个近前沿模型（2019–2025），每个 agent/task 组合跑约 8 次。50% 时间视野翻倍时间 = 207 天（95% CI 166–240 天，约 ±19%）；80% 时间视野约短 4–6 倍，翻倍时间相近（204 天）——说明模型"偶尔成功长任务"和"稳定胜任中长任务"差距还很大。
+  - o3 高于长期趋势线（p=0.006），提示 2024 年后增速更快；单用 2024–2025 数据外推，一个月视野最早可到 2027 年初。
+  - 外部效度验证：SWE-bench Verified 上同样的指数趋势成立（翻倍时间约 70 天，比主套件预测的 143 天更陡）；内部真实 PR 实验发现模型表现与"低上下文外包人员"耗时一致、与"仓库维护者"耗时不一致（维护者比外包人员快 5–18 倍）。
+  - 失败模式归因：GPT-4 的失败 12/31 是"重复失败动作"，o1 只有 2/32；o1 的失败一半是"过早放弃任务"——能力提升主要来自更会工具使用、更能从错误中恢复、逻辑更强。
+  - "messiness"：给任务打 16 个"真实世界的脏度"因子（动态环境、不可逆失误、资源受限、需要主动搜寻信息等），均值 3.2/16；控制时长后，messiness 每 +1，成功率约降 8.1%。但高/低 messiness 子集的时间趋势接近——脏任务绝对分低，但进步速度没有变慢。
+  - 成本：按 $143.61/小时（Google L4 工程师平均时薪折算）对比，超过 80% 的成功 run 成本不到人类做同样任务的 10%。
+- **与课程主题的关系**：这一篇是全讲的"标尺"。它给出把任意 benchmark 结果换算成"人类时间"的方法论（human baseline + logistic 拟合），让 GPT-2 和 o3 能放在同一条曲线上比较，也是后续 GDPval（用时间×时薪换算经济价值）和 DeepScholar（长任务自动评分）的动机来源。
 - **可演示的代码点**：
-  - 从零实现记忆层级数据结构（working context / FIFO queue / recall storage）与队列管理器，用 mock LLM 走完"内存压力 → 保存 → flush → 递归摘要"。
-  - 实现函数执行器 + 简单的函数 schema，模拟 `working_context.replace("Boyfriend named James", ...)` 这类自定向改写。
-  - 复现"memory pressure"阈值逻辑：70% 警告、100% flush、逐出 50%、生成递归摘要，可视化 main context 恒定有界。
-  - 用 MockLLM + 脚本化函数调用演示多会话一致性问题（DMR 的简化版）。
+  - 从零实现 time horizon：造一个"任务时长 vs 成功率"的合成数据集，numpy 手写 logistic 回归（或用 scipy.optimize）拟合 $h_{\text{agent}}$ 和 $\beta_{\text{agent}}$，验证 $h_{\text{agent}}=t_{\text{task}}$ 时成功率恰为 0.5。
+  - 画"时间视野-发布年份"对数图：对 $\log h$ 做 OLS，输出翻倍天数，复现"每 7 个月翻倍"。
+  - 模拟层次 bootstrap 误差条（对 family/task/run 三层重采样）。
+  - 演示 50% vs 80% 视野的差距（不同成功率阈值下拟合）。
 
-### 论文 2：Cartridges: Lightweight and general-purpose long context representations via self-study（arxiv:2506.06266，cartridges.pdf）
-
-- **核心思想**：大量应用反复把同一份大语料（代码库、财报、病历、聊天记录）塞进 context（ICL）。ICL 的代价是 KV cache 随输入线性增长，服务成本极高。Cartridges 提出**离线为每份语料训练一个"小 KV cache"**（可训练参数，本质是简化版 prefix-tuning），推理时把这个训练好的 KV cache（叫 *Cartridge*）加载进 LLM，再拼上用户 query 解码。训练成本可被"反复查询同一语料"摊薄。关键发现：直接用 next-token prediction（NTP）在语料上训练不行（只会背诵、不泛化）；他们提出 **Self-study** 配方：让模型自己生成关于语料的合成对话，再用 **context-distillation 目标**训练，从而复刻 ICL 的功能。
-
+### 论文 2：GDPval: Evaluating AI Model Performance on Real-World Economically Valuable Tasks（arxiv:2510.04374，gdpval.pdf）
+- **核心思想**：METR 用"时长"标度能力，但时长不等于经济价值——一句"7 小时的工作"没说明这工作值不值钱、做得好不好。GDPval（OpenAI）直接测**真实经济价值任务**：从美国对 GDP 贡献最大的 9 大行业中，选 44 个高薪、以数字化为主的职业，让平均 14 年经验的行业专家把他们真实的工作产物改造成任务（每个任务 = 一份 request + 一份 deliverable）。主指标是**盲评 win rate**：由该职业的专家成对比较"模型产出 vs 人类专家产出"，判定谁更好/打平。核心结论：**前沿模型质量已逼近行业专家**（最优模型 Claude Opus 4.1 有 47.6% 的产出达到"优于或打平人类"），且 OpenAI 模型性能随时间**近似线性**提升；但若把专家审阅/返工的时间算进去，纯速度优势大幅缩水。开源 220 个 gold 任务并给出实验性自动评分服务（evals.openai.com）。
 - **关键公式/算法**：
-  - **Cartridge 参数化**：`Z = {zk, zv} ∈ R^{p×d}`（每层 p 个可训练 key/value 向量），内存占用等价于"p 个 token 的 KV cache"。做法：把 ICL 的 KV cache 中对应语料 C 的那 n_C 对 K/V 替换成 Z，其余参数全部冻结，只把 loss 反传到 Z 的 key/value 向量上。
-  - **初始化（关键技巧）**：把 Z 初始化为"语料 C 前 p 个 token 的 KV cache"。消融（LongHealth 准确率）：随机向量 29.9%，随机 token 的 K/V 51.3%，用语料前 p 个 token 55.3%。随机初始化会不稳定、效果差（呼应 prefix-tuning 原文结论）。
-  - **Self-study 合成数据（Algorithm 1）**：① 把语料 chunk（512–4096 token，支持超长语料）；② 取一个 seed prompt；③ 让同一个 LLM 扮演 A、B 两个角色交替采样 k 轮对话（A 的历史含 seed prompt + 语料子块在 system prompt；B 的历史不含 seed prompt，但角色对调），拼接成训练序列 `x = a1 ⊕ b1 ⊕ … ⊕ ak ⊕ bk`。主实验单轮对话 k=1。
-  - **Seed prompts**：5 种通用类型（structuring 结构化、summarization 总结、question 提问、use cases 用例、creative 创作），所有语料共用同一套、不含语料特化信息。用 5 种随机采样优于单一 seed：LongHealth +4.8 准确率（43.6→48.4）、MTOB +7.9 chrF（24.1→32.0）。
-  - **Context-distillation 目标**：
-    `argmin_Z Σ_{(x,c̃)∈D} Σ_{i=1}^{|x|} D_KL( F(·|c̃ ⊕ x[:i]) || F_Z(·|x[:i]) )`
-    教师 = 把语料子块 c̃ 放 context 的模型分布，学生 = 带 Cartridge 的同一模型分布。优于同数据量下的 NTP：MTOB +8.6 chrF（24.9→33.5）、LongHealth +3.7 准确率。
-  - 消融：**KV cache 参数化优于 LoRA**——MTOB 上同内存 prefix-tuning 高 4.5 chrF；更关键的是对无关查询（MMLU）的破坏：LoRA 随 size 增大从 54.7 掉到 45.3，prefix-tuning 只从 54.7 掉到 54.3。冻结 attention sink（首个 token 的 K/V）提升训练稳定性。训练成本：LLaMA-8B 的 ICL 质量 Cartridge 约 30 分钟/单台 8×H100 节点。
-
+  - win rate：盲评成对比较，评分取值 {0, 0.5, 1}（模型赢/平/输）。
+  - 自动化评分一致性（也是"评测评测者"的公式）：
+    - 人-机一致率 $A^{\text{HA}}_s = E[\,1 - |H - A|\,]$；人类间一致率 $A^{\text{HH}}_s = E[\,1 - |H_1 - H_2|\,]$（对同一样本的两份人类评分取均值）。
+  - 经济价值换算：任务美元价值 = 平均完成时长 × 该职业时薪中位数（OEWS 数据）。
+  - 速度/成本收益模型（"先用模型，不满意自己修"）：设 $w_i$ 为模型在任务 $i$ 上的 win rate，$M_T/M_C$ 为模型耗时/成本，$R_T/R_C$ 为专家审阅耗时/成本，$H_T/H_C$ 为人类完成耗时/成本：
+    - try-1 次：$E[T_{1,i}] = M_{T,i} + R_{T,i} + (1-w_i)\,H_{T,i}$
+    - try-n 次：$E[T_{n,i}] = (M_{T,i}+R_{T,i})\,\frac{1-(1-w_i)^n}{w_i} + (1-w_i)^n\,H_{T,i}$；当 $n\to\infty$ 时人类时间被 $(M_T+R_T)/w$ 取代。
+  - 任务构建流水线：从 9 大行业（占 GDP>5%，Q2 2024）选每个行业贡献薪酬最高的 5 个数字化职业（用 GPT-4o 按 O*NET 任务标注"是否数字化"，阈值 60%）；专家平均 14 年经验、需面试+背调+培训+测验，入选率 <10%；每任务平均 5 轮人类评审。
 - **关键实验结论**：
-  - **核心数字**：跨基准平均，Cartridges 匹配 ICL 质量，同时内存少 **38.6×**、峰值吞吐高 **26.4×**。LongHealth 最多省 10×、QASPER 最多省 100× 内存；压缩类基线（截断、GPT-4o 摘要、DuoAttention）在 >2× 压缩时质量快速崩坏，而 Cartridge 是训练出的压缩。
-  - **NTP 的失败**：用 107× 更少内存完美背诵语料，但只会在"背诵类"查询上表现好，其他查询类型（推理/结构/创作）不泛化。
-  - **上下文长度外推（MTOB）**：LLaMA-8B（128k 窗口）用 Self-study 的 chunking 处理 484k token 的卡朗语（Kalamang）教材，前 130k token 上比 ICL 高 **11.0 chrF**，并匹配手工精选 60k 子集上的 ICL——窗口装不下的语料也能用。
-  - **可组合性**：两个独立训练的 Cartridge（AMD 10-K、Pepsi 10-K）直接拼接即可回答跨文档问题，无需联合训练；显著优于"只放一个 Cartridge"和"截断版 ICL"（后者要 39.8 GB context）。数据集：LongHealth、MTOB、QASPER、GENCONVO（源自 FinanceBench）。
-
-- **与课程主题的关系**：本文给出"记忆"的第二个答案——**把记忆做成可学习的连续表示**。MemGPT 在"控制层"搬 token；Cartridges 在"表示层"把整份语料压缩进 KV cache。它也展示了 ICL 的本质：ICL 质量其实可以被"蒸馏"进参数里，从而把"运行时昂贵的上下文"换成"离线便宜的表示"。这对"agent 的长期记忆"（如记住用户全部聊天记录）和"coding agent 的 full-repo 上下文"有直接启发，也是后续 15/16 讲把推理/数学与压缩结合的前瞻。
-
+  - 规模：full set 1,320 个任务（每职业 30 个），gold 子集 220 个（每职业 5 个，69% 任务需操作参考文件，最多 17 个参考文件）。gold 任务平均耗时 9.49 小时（中位 5 小时），平均美元价值 $398；任务几乎都是多模态交付物（CAD、PDF、PPTX、表格、音视频）。
+  - 头部 win rate：gpt-4o 12.5% → o4-mini 29.1% → o3 35.2% → gpt-5 39.0%，Claude Opus 4.1 最优约 47.6%（win+平手）——质量逼近但未超过人类。
+  - 速度/成本：naive 比值高达 90–327 倍；计入"审阅+失败返工"后（try-1），gpt-4o 反而只有 0.87 倍（更慢）、gpt-5 约 1.12 倍；try-n 后 gpt-5 约 1.39 倍。**结论：报告里 327x 的 naive 加速是被高估的，真实增益主要来自"人在回路"。**
+  - 自动评分器（GPT-5-high）与人类一致率 66%，人类间一致率 71%——只差 5 个百分点；但对强模型的产出一致率更低（模型偏好自己的产出）。12/220 个任务被标记为"不可自动评分"（需联网、需非 Python 运行、字体渲染、语音转写等）。
+  - 提示工程+脚手架（best-of-4 + GPT-5 judge、鼓励多模态自查）：win rate +5pp，PPT 格式错误 86%→64%，多模态自检率 15%→97%；推理 effort 越高越好。
+  - 弱上下文版（prompt 缩短到 42% 长度）：模型明显变差——真实工作是"弄清要做什么"，缺上下文是最难的部分。
+- **与课程主题的关系**：从 METR 的"时长标尺"升级为"经济价值 + 质量"双标尺，并示范了自动评测的边界：真专家盲评贵（单次对比 >1 小时）但可靠，自动评分便宜但只到 66% 一致率。它同时是"LLM judge 可靠性"讨论的靶子（第 3 篇论文继续深化）。
 - **可演示的代码点**：
-  - 用一个小 transformer（torch 从零实现因果自注意力，或加载小开源模型）冻结权重，训练 p 个可训练 K/V 向量，在玩具语料上对比 NTP objective 与 context-distillation objective 的泛化差异。
-  - 手算/可视化初始化重要性：random / random-token / 语料前 p-token 三种初始化下的训练曲线。
-  - 在 toy 语料上演示"背诵 vs 泛化"：NTP 训练出的 Cartridge 能续写但答不了问题；Self-study 数据 + KL 蒸馏后能回答。
-  - 演示 Cartridge 组合：两个独立训练的 Cartridge 拼接后回答需要两者信息的跨文档问题。
+  - 从零实现 win rate 统计与一致率：给定合成评分数据，算 win rate、$A^{\text{HA}}$、$A^{\text{HH}}$，比较"自动评分器"和"人类"。
+  - 实现 try-n-then-fix 的期望成本公式并画曲线：看 win rate 多高时模型协助才划算（交叉点分析）。
+  - 演示盲评打分流程：用 mock LLM 生成两个交付物描述，让"人类 judge"（脚本或 mock）成对打分，理解 0/0.5/1 三值评分。
 
-### 论文 3：CacheBlend: Fast LLM Serving for RAG with Cached Knowledge Fusion（arxiv:2405.16444，cacheblend.pdf）
-
-- **核心思想**：RAG 输入由多个文本 chunk 拼成，prefill（对整段输入算 KV cache）很慢，决定了 time-to-first-token（TTFT）。已有两类 KV 复用方案各有缺陷：*prefix caching*（vLLM/SGLang/RAGCache）只复用前缀 chunk 的 KV，其他 chunk 照常 prefill，对多 chunk 场景几乎没用；*full KV reuse*（PromptCache）复用所有 chunk 但忽略了 chunk 之间（以及 chunk 与前面文本）的 **cross-attention**，质量崩坏。CacheBlend 提出 **selective KV recompute（选择性 KV 重算）**：按层只重算一小部分 token 的 KV（其余复用），从而同时拿到 full KV reuse 的速度和 full KV recompute 的质量；重算的微小额外延迟还能与"从慢速存储加载 KV cache"流水线重叠，因此 KV cache 可以放到更慢更便宜的设备上而不增延迟。
-
+### 论文 3：DeepScholar-Bench: A Live Benchmark and Automated Evaluation for Generative Research Synthesis（arxiv:2508.20033，deepscholar-bench.pdf）
+- **核心思想**：评测"深度研究/生成式研究综述"这类长程 Agent 的新 benchmark。真实研究综述任务是"开放式的、正确性没有唯一标准、依赖实时网络检索"的，而既有 QA benchmark 只测短答案、专家手工标注集又会过时和被污染。DeepScholar-Bench 用**持续更新的数据管道**从近期高质量 arXiv 论文自动生成 query（任务：给定论文标题+摘要，生成 related work 一节，人类作者写的原文就是 exemplar），并提出**三维 7 指标的全自动评测**：知识综合（organization & coherency、nugget coverage）、检索质量（relevance rate、reference coverage、document importance）、可验证性（citation precision、claim coverage）。全部指标用 LLM judge 实现，并与人类评分校准。结论：**所有系统几何平均都低于 31%，benchmark 远未饱和**，连 OpenAI DeepResearch 的最佳指标（nugget coverage 39.2%）离饱和也很远。
 - **关键公式/算法**：
-  - **动机数字**：4000 token 输入在单张 A40 上 prefill 要 3s（Llama-34B）/ 6s（Llama-70B）。
-  - **记号**：`KV_full`（全量重算的 cache）、`KV_pre`（预计算 cache）、`KV_new`（CacheBlend 更新后的 cache）；每层 i 产生前向注意力矩阵 `A_i`。定义 **KV deviation** `Δkv(KV_i, KV_full_i)[j] = |KV_i[j] − KV_full_i[j]|`（衡量某个 token 某层的 K/V 偏离全量重算多少），以及 **attention deviation** `Δattn(A_i, A_full_i)`（前向注意力矩阵的 L-2 范数差）。目标：快速把 KV_pre 更新到 KV_new，使各层 `Δattn(A_new_i, A_full_i)` 最小。
-  - **选择性重算的工作流（per layer）**：对每层输入套 mask 只保留选中的 token → 只对选中 token 算 Q/K/V → 把未选中 token 的 K/V 从预计算 cache 里补回（这样注意力矩阵仍包含选中 token 与所有 token 的注意力）→ 跑同一注意力模块得到下一层输入。计算开销 ∝ 选中 token 数：重算 r% 的 token，开销就是全量 prefill 的 r%。
-  - **选哪些 token 重算（HKVD）**：
-    - Insight 1：重算 KV deviation 更高的 token，对降低 attention deviation 贡献更大 → 每层选 KV deviation 最高的约 10-20%（High-KV-Deviation，HKVD）token。
-    - Insight 2：token 的 KV deviation 在相邻层高度相关（Spearman 秩相关高，因为 transformer 相邻层输入 embedding 变化缓慢）→ 不必每层都全量算 deviation，采用**渐进筛选**：第 1 层全量重算并选 r1%（略高于目标 r）个 token，下一层只在这 r1% 里选 r2%（略低于 r1%）继续重算，逐层收敛。
-  - **为什么够**：注意力稀疏性——约 10-15% 的 token 拥有远超其他 token 的 KV deviation；只有与别的 chunk 有高注意力（高 cross-attention）的 token 才需要重算。
-  - **RoPE 位置恢复**：预计算 chunk 的 K 向量只需乘一个旋转矩阵（`[cos mθ, −sin mθ; sin mθ, cos mθ]`），因为 RoPE 下注意力分数只依赖相对位置（附录给了证明）。这一步开销可忽略。
-  - **流水线与装载控制（Loading Controller）**：第 i 层的重算在第 i−1 层 KV 加载完后即可开始 → 用 KV 加载延迟去"藏"重算延迟。两个延迟估计器（`T_recompute(r%, LLM, L) = r% × Prefill(LLM, L)`，`T_load(LLM, L, device) = PerTokenKVSize × L / Throughput(device)`），选取 r 使两者相等，再与质量下限 r* = 15% 取 max；或固定 15% 重算率，选"最便宜且 T_recompute ≥ T_load"的存储设备。例：Llama-7B 重算 15% 每层 3ms，从 NVME SSD 加载一层 KV 需 16ms → 延迟被完全隐藏。
-  - **KV cache store**：把输入按文本 chunk 切分（应用相关，论文沿用 PromptCache 的策略）、对 chunk 文本 hash 查 cache，LRU 逐出；hash 表放 CPU（100 万 chunk 仅 16MB）。
-
+  - 任务形式化：给定论文描述 $d$，检索源集合 $S$，生成综述 $W$，与人类 exemplar 对比。
+  - Relevance Rate：LLM judge 给每个被引源打相关性 $Rel(s)\in\{0,1,2\}$，$RR(S)=\frac{1}{2|S|}\sum_{s\in S}Rel(s)$。
+  - Reference Coverage：先对 exemplar 的引文标"important/not"，$RC(S,E)=\frac{1}{|E|}\sum_{s\in S}\mathbb{I}[s\in E]$（对重要引文的召回率）。
+  - Document Importance：$DI(S,S^*)=\min\!\big(\frac{\text{median cites}(S)}{\text{median cites}(S^*)},1\big)$，衡量引文"含金量"（被引次数中位数对比人类 exemplar）。
+  - Nugget Coverage：从人类 exemplar 抽取信息 nugget（essential fact），算生成报告覆盖了多少比例（沿用 Great Nugget Recall 的 LLM 方法）。
+  - Organization & Coherency：LLM-as-judge 成对比较生成报告 vs 人类 exemplar，交换顺序两次取平均以消除位置偏差，报告 win rate。
+  - Verifiability：Citation Precision（句内引文是否真的支撑该句某条主张）、Claim Coverage（句子主张是否被其引文/滑窗 $w$ 内引文完全支撑）。
+  - 数据管道：限定 arXiv 发表日期区间（避开 Llama-4 训练截止 2025-04-05 以防污染）、只保留 v1、只取会议已接收论文、有显式 Related Work 节和 .bib。
 - **关键实验结论**：
-  - **TTFT 减 2.2–3.3×、吞吐增 2.8–5×**（相对 full KV recompute），质量损失 ≤0.01–0.03（F1/Rouge-L）。相对 prefix caching 也是 TTFT 2.2–3.3× 降、吞吐提升。
-  - 相对 full KV reuse：几乎相同 TTFT，但 QA 任务 F1 高 0.1–0.2、摘要任务 Rouge-L 高 0.03–0.25（full KV reuse 质量常被超过 2× 优势拉开）。
-  - 5%–18% 重算率下，相对 full KV recompute 质量损失 ≤0.002，可换算成 TTFT 减 4.1–6.6×。
-  - 质量随 chunk 数量提升（F1 从约 0.15 到 0.35 区间），full KV reuse 与 full prefill 的差距随 chunk 变多而扩大 → 说明 cross-attention 在真实多 chunk 场景普遍存在。RAG 之外，CacheBlend 也优于 LangChain 的 MapReduce（TTFT 低 2–5×、F1 更高）和 MapRerank（质量高很多）。
-  - 模型：Mistral-7B、Yi-34B、Llama-70B（后两者 8-bit 量化）；数据集：2WikiMQA、Musique（QA，F1）、SAMSum、MultiNews（摘要，Rouge-L）；chunk 512 token，取 top-6 chunk（L2 距离）。
-
-- **与课程主题的关系**：本文给出"记忆"的第三个答案——**在工程/系统层让记忆复用变快**。前面两篇关心"记忆里存什么、怎么组织/压缩"，这一篇关心"同一段记忆被反复用时，怎么省 prefill"。它是让 MemGPT/Cartridges 这类机制真正落地的 serving 基建：reused context 的 KV 缓存 + 跨 chunk 的 cross-attention 恢复 + 慢速廉价存储。课程里它把"记忆"和"成本/吞吐"连起来，与 14 讲工程向（agent 要规模化服务）的定位吻合。
-
+  - DeepScholar-June-2025：63 篇论文、18 个 arXiv 领域，平均每篇 related work 有 23 条不重复引文，63% 引文在 arXiv 上。DeepScholar-Nov-2025 扩展到 200 个 query、75+ 学科。
+  - 主结果（几何平均）：OpenAI DeepResearch 最高 0.309；OpenAI o3 search agent 0.287；DeepScholar-ref (GPT-4.1, Claude) 0.286；所有系统 <0.31。DeepResearch 在 Nugget Coverage（.392）、Reference Coverage（.187）、Document Importance（.124）上都仍 <0.40——"能组织好文笔（Org .857），但漏掉关键事实、引不到重要文献"。
+  - DeepScholar-ref（LOTUS 语义算子：semantic filter → semantic top-k → semantic aggregation）：开源强基线，可验证性比 DeepResearch 高最多 6.3 倍、便宜 4.3 倍、快 2.28 倍。
+  - Oracle 消融：喂给系统"正确答案应引的重要文献"（oracle retriever）后 Reference Coverage 到 1.0，但 Nugget Coverage 也只到 ~0.49——**瓶颈主要不在检索，而在"把好材料合成成关键事实"**。
+  - LLM judge 校准（11 名 CS 博士、300+ 条标注）：Organization 成对比较与人类一致率 71.43%，nugget 标注 83.33%，reference importance 65.9%——LLM judge 在长文档任务上可用但仍非完美。
+- **与课程主题的关系**：这是"自动评测可靠性与漏洞"的正面示范：用 LLM judge 支撑 7 个指标，却必须一一与人类校准、考虑位置偏差；同时"live benchmark + 防污染"是针对"benchmark 饱和/数据泄漏"问题的工程化答案，呼应 METR 对 benchmark 饱和的批评。它也是第 5 节"构建自己的评测 harness"的模板。
 - **可演示的代码点**：
-  - 手算 2-chunk 注意力矩阵：构造一个"消息/罗纳尔多进球数"式的两 chunk 问题，对比 full recompute、full KV reuse（无 cross-attention）、CacheBlend（只重算 HKVD token）三种情况下的前向注意力矩阵差（numpy）。
-  - 从零实现 HKVD 选择与渐进筛选：给定相邻两层 KV deviation 矩阵，算 top-r% token 与 Spearman 秩相关，验证"层间高相关"。
-  - 复现 attention sparsity：在玩具注意力上画出 KV deviation 的 CDF，观察 10-15% token 占大部分 deviation。
-  - 用延迟模型演示流水线：模拟 `T_recompute(r)` 与 `T_load(device)`，让学生选 r 和存储设备（复制论文的 Loading Controller 决策）。
+  - 从零实现几个指标：给定一组 mock 引文（含被引次数、相关度标签、claims），算 RR、RC、DI，理解各指标对"好的综述"不同侧面的刻画。
+  - 实现 nugget coverage：用 mock LLM 从 exemplar 提取 nugget，再判断生成报告是否覆盖。
+  - LLM judge 位置偏差演示：同一对答案正反两序各评一次，统计不一致率，再看"swap 平均"如何消除偏差。
+  - 几何平均聚合：解释为什么"用几何平均而不用算术平均"（任何维度得 0 都会拖垮总分，不允许单项摆烂）。
 
 ## 教学主线（想象 Stanford 老师会怎么教）
 
-建议的讲授顺序与直觉类比：
-
-1. **失败案例建立动机**：展示一个"金鱼记忆"的 assistant——上一会话记住的用户生日、偏好，这一会话全忘了；或一份 10-K 财报远超 context 装不下。引出问题：agent 要长期运行，context 窗口是硬约束，而且长上下文模型"中间丢"（lost in the middle，MemGPT 引言里引的证据）。**此处点出第一句话：Agent 缺的不是参数，是记忆。**
-2. **OS 类比：分层记忆**：操作系统如何用"物理内存 + 磁盘 + 分页"假装有无限内存？把 LLM 的 context 比作内存、外部存储比作磁盘，函数调用比作分页指令（page in / page out）。这就是 MemGPT 的全部骨架。用图 3 的记忆层级图讲清 main context 三段（system/working/FIFO）与 external context 两库（recall/archival）。
-3. **控制机制：谁决定搬什么**：MemGPT 的精髓是"自定向"——LLM 自己决定何时 append/replace/evict/retrieve。讲清 memory pressure warning（70%）→ flush（100%）→ 递归摘要的闭环，以及 request_heartbeat 函数链。读者最容易卡住的地方：**为什么要递归摘要而不是直接删？为什么 eviction 要让 LLM 参与而不是 LRU 硬逐出？**（答案：记忆里藏着语义重要性，LLM 判断比固定策略好；但也可以指出这是代价——每次都烧 token。）
-4. **从"搬运 token"到"学习表示"**：指出 MemGPT 局限——记忆操作全走文本、耗 token、受窗口约束。转向 Cartridges：能不能不搬文本，而是把整份语料压缩成可训练 KV cache？这里要讲清前缀调优（prefix-tuning）的本质：往输入前面加 p 个"虚拟 token"，但这次是每份语料训练一份，训练成本跨查询摊薄。
-5. **self-study 的三个设计决策**：为什么 NTP 不行（背诵不泛化）→ 合成对话数据（两个角色互问互答、5 种 seed prompt）→ context-distillation 目标（教师=语料在 context，学生=带 Cartridge）。每个决策配一张消融图（Figure 3/6）。此处可手算一页 KL 蒸馏公式，让读者看到"对齐分布"而不是"背文本"。读者容易卡住：**为什么蒸馏而不是 NTP 就能泛化？**（因为蒸馏教的是"面对语料时的答题行为"，NTP 只教"语料本身长什么样"。）
-6. **回到系统层：复用 KV 就是复用记忆**：如果 Cartridge 是一份"训练好的记忆"，那么 RAG 里反复出现的 chunk 其实共享同一份"记忆"（预计算 KV cache）。引出 CacheBlend 的问题：全量复用会丢 cross-attention。用一个 Messi/Ronaldo 对比题当例子，让读者亲眼看"两个 chunk 分开算 KV 再拼起来，模型答错"。
-7. **手算/可视化理解**：在一页上画出三种方案的注意力矩阵（full recompute / full KV reuse / CacheBlend 选择性重算），直观看到黄色 cross-attention 块的有无。然后讲 HKVD 选择（Insight 1、Insight 2、渐进筛选）与"注意力稀疏→10-15% token 够用"。
-8. **系统工程**：Loading Controller 流水线（重算一层时加载下一层），让慢速 SSD 变得可行。最后把三篇收拢成一句：**MemGPT 决定记忆放哪、Cartridges 决定记忆长什么样、CacheBlend 让记忆复用不花钱**——并预告它们都会出现在后续讲（如 15/16 的推理、17 的评测）里。
+1. **先立动机：现有 benchmark 到底在骗你什么。** 抛出例子：同一个模型在 MMLU 接近满分、在 SWE-bench 却很吃力；HellaSwag、Humanity's Last Exam 是"反向筛选"出来专难模型的题。给读者一个直觉锚点——**"在选择题上 90 分"无法翻译成"能做完几小时的工作"**。由此引入三篇共同的敌人：benchmark 饱和、无跨模型统一尺度、任务不真实。
+2. **第一篇 METR 建立"标尺"：把能力换成人类时间。** 老师会先讲一个直观类比：就像用"人类跑完要多久"来度量赛道的难度。然后拆解三步：构造秒级到 8 小时的任务套件 → 找 800+ 人类基线测时长（几何平均）→ 对每个模型做 logistic 拟合得到 50% time horizon。亲手带读者算一遍 logistic：为什么 $h_{\text{agent}}=t_{\text{task}}$ 时成功率是 0.5。最后亮出那张"每 7 个月翻一倍"的对数曲线，并强调**斜率比单个模型的绝对高度更可信**（误差高度相关）。卡点提示：读者容易把"任务时长"误当"模型运行时长"；要强调时长是人做的、成功率是 AI 做的，两者通过模型拼起来。
+3. **从时间到钱：GDPval 换一个标尺。** 承接："METR 告诉你活儿有多长，没告诉你活儿值多少钱、做得像不像样。" 讲 GDPval 如何自顶向下选职业（9 大行业 × 每行业薪酬前 5 的职业）、如何由专家造任务并给任务标"美元价值 = 时长 × 时薪"。核心演示是**盲评 win rate** 的机制：成对、匿名、专家判 0/0.5/1。在这里老师会埋一个伏笔：真专家打分太贵（一次对比 >1 小时），于是他们训练了一个自动评分器——只有 66% 和人类一致，这自然引出第三篇。
+4. **自动评测的可靠性与漏洞：DeepScholar-Bench 收尾。** 讲"既然人太贵，就让 LLM 打分"，但三个坑逐个示范：LLM judge 有位置偏差（所以要成对交换顺序取平均）、模型偏好自己的产出（GDPval 里自动评分器对强模型一致率更低）、评测本身的"正确性"需要再评测（DeepScholar 拿 300+ 条人类标注校准 71%/83%/66% 的一致率）。最后用 DeepScholar 的三维 7 指标把"好的深度研究"拆解，用 oracle 实验点出"瓶颈在综合而非检索"。**收束全讲的一句话**：评测长程 Agent 难在四个环节各有一层误差——任务分布是否真实、成功判据是否唯一、自动评分器是否可靠、以及这些误差本身是否被校准过。
+5. **落到动手：让读者自己写一个 eval harness。** 用 mock 环境把上面每个指标跑一遍（时间视野拟合、win rate、一致率、nugget coverage），体会"评测一个评测"和"评测一个 Agent"是同一件事。
 
 ## 代码演示点子（3-6 个）
 
-1. **从零实现 MemGPT 式分层记忆循环**：用 Python 实现 memory hierarchy（working context + FIFO queue + recall storage）+ 函数执行器，走 llm_client（mock 模式给脚本化轨迹）。关键思路：队列管理器按 token 计数插入 memory-pressure 系统消息（70%）、超限 flush（100%）并生成递归摘要；函数调用按 schema 校验后执行并回喂。期望输出：多轮对话后 main context 的 token 数始终 ≤ 预算，且旧信息可经 recall_storage.search 找回。
-2. **可视化"逐出 + 递归摘要"的预算演化**：给一个固定 context budget，逐步 append 消息，画"main context 占用 vs 轮次"曲线，标注 warning/flush 点，展示每一轮 flush 后占用回落；把递归摘要的内容打印出来，让学生看到信息被压缩而非删除。数据用玩具脚本消息即可，不依赖 LLM。
-3. **从零实现最小 Cartridge（prefix-tuning）训练**：用 torch 从零实现一个小的因果自注意力语言模型（或加载小模型），冻结全部权重，只训练 p 个可训练 K/V 向量。在玩具语料（如几段"人物档案"）上对比两种目标：NTP on corpus（只会背诵）vs context-distillation（KL 对齐教师分布，能回答合成问题）。期望输出：背诵损失更低的 Cartridge 答不了问题，而蒸馏出的 Cartridge 能答——直观复现论文 Figure 3 左图。
-4. **手算 KV cache 复用与选择性重算**：构造两 chunk 输入（类似 Messi/Ronaldo），用 numpy 手算三种方案的注意力矩阵/前向注意力偏差（full recompute vs full reuse vs 只重算 HKVD token）。再实现 HKVD 选择 + 渐进筛选：给定相邻两层 KV deviation 矩阵，选 top-r% token，计算 Spearman 秩相关验证层间一致性（Insight 2）。期望输出：一张注意力热图 + 三条 deviation 曲线。
-5. **Loading Controller 决策模拟**：复现 CacheBlend 的延迟模型——给定模型 prefill 速度、存储设备吞吐，函数 `T_recompute(r)` 与 `T_load(device)`，让学生求解"不增延迟的最大重算率"以及"给定 15% 重算率下的最廉价存储设备"。期望输出：与论文 Figure 10 一致的决策表/曲线，直观看到流水线为何能"藏"重算延迟。
-6. **Cartridge 组合实验**：训练两个独立 Cartridge（两个 toy 文档），直接拼接后问一个需要两者信息的跨文档问题，对比"只放一个"与"ICL 全量塞 context"。期望输出：组合出的回答正确，且内存远小于 ICL。
+1. **从零实现一个 Agent 评测 harness**：定义一个小任务池（如"改写函数 + 单测自动打分"），用 `llm_client` 的 mock 模式跑 N 次，统计成功率、逐步构造"任务池定义 → 运行 → 二元化 → 聚合"的最小闭环。期望输出：每个任务的 success/fail 表与平均成功率，让读者看到"评测 harness = 环境 + 评分函数 + 聚合统计"。
+2. **长任务的时间-完成率曲线与 time horizon 拟合**：构造合成数据 `tasks = [(log_time, true_rate)]`，用 `scipy.optimize` 或手写梯度下降拟合 $p=\sigma((\log h-\log t)\cdot\beta)$，输出拟合的 $h$（50% 时间视野），并画出数据点+拟合曲线，标注"该模型 50% 成功率对应的人类时长"。再对多个"模型"（不同 $h$）做 OLS，画 $\log h$ vs 时间的直线，报翻倍天数。
+3. **Win rate 与评分一致率计算**：给几组 {model, human, tie} 三值评分模拟数据，计算模型 win rate，再实现 $A^{\text{HA}}_s=E[1-|H-A|]$ 与 $A^{\text{HH}}_s=E[1-|H_1-H_2|]$，对比"自动评分器 vs 人类"和"人类 vs 人类"两条基线，复现 GDPval 的"66% vs 71%"结构。
+4. **LLM judge 偏差演示**：让 mock/真实 LLM 对同一对答案做正反两序成对比较，统计位置偏差（正反不一致的比例）；再演示"swap 平均"如何把偏差对 win rate 的影响消掉，以及"自我偏好"（judge 更容易选与自己风格/模型同源的输出）。
+5. **Try-n-then-fix 的成本-收益曲线**：用公式 $E[T_n]=(M_T+R_T)\frac{1-(1-w)^n}{w}+(1-w)^n H_T$，固定 $M_T,R_T,H_T$，扫 $w$（模型质量）和 $n$（尝试次数），画"总时间 vs win rate"曲线，找模型 win rate 超过多少、模型协助才比纯人工划算（交叉点），直观展示"naive 327x 为什么失真"。
+6. **检索质量三维指标 + oracle 消融**：给一组 mock 引文（每条带 related/important/被引次数/对应 claim），实现 RR、RC、DI；再模拟"把 oracle 的重要文献直接喂给系统"，看 RC 拉满而 nugget coverage 没跟着涨，复现"瓶颈在综合而非检索"的结论。
 
 ## 作业点子（3 个）
 
-1. **实现 MemGPT 队列逐出策略**：填空实现 `should_warn(tokens, budget)`、`should_flush(tokens, budget)` 与递归摘要更新，assert 每轮后 `len(main_context) <= budget`。考察：70%/100% 阈值、50% 逐出、摘要替换的语义。小提示：把"逐出的消息"接在旧摘要后面再喂给 mock LLM 生成新摘要。
-2. **HKVD token 选择与层间相关性**：填空实现 `top_r_percent(kv_dev, r)` 选出每层 HKVD token，并用 `spearman` 计算相邻两层 deviation 秩相关；assert 相关性高于给定阈值、且重算 HKVD 后 attention deviation 低于重算低 deviation token。考察：Insight 1/2 的直接落地。
-3. **context-distillation 目标填空**：填空补全 `d_kl` 项：`D_KL(F_teacher || F_student)`，其中教师 logits 来自"语料在 context"、学生 logits 来自"Cartridge 版本"，然后与 NTP 损失对比梯度方向；assert 蒸馏损失在"面对问题"时低于 NTP 损失。考察：对"对齐分布"而非"背诵文本"的理解。
+1. **拟合 time horizon**：给一张"任务人类时长 + 各模型每任务成功率"的小表，要求用 scipy 拟合 logistic 求出某模型的 $h$ 和 $\beta$，再断言 `abs(h_est - 真值) < 容差`、以及 $h=t_{\text{task}}$ 时预测成功率约等于 0.5。小提示：先对时长取 log 再做 logistic 回归；目标函数是负对数似然。
+2. **实现 win rate 与一致率**：给一份 {model_grade, human1_grade, human2_grade} 的评分表，要求计算该模型的 win rate、$A^{\text{HA}}$、$A^{\text{HH}}$，断言自动评分器"没人类彼此之间一致"且"对弱模型更一致"。小提示：$|H-A|$ 只在 H 与 A 都是 0/0.5/1 的三值时才直接算，先想清楚 tie 该记成什么。
+3. **实现 nugget coverage**：给一个人类 exemplar 的 n 个 nugget 和一个 mock 生成报告的句子列表，用简单关键词/嵌入相似度或 mock LLM 判断每个 nugget 是否出现，算覆盖比例，断言"报告 B 覆盖更全所以分更高"。小提示：nugget 是"essential fact"级别的原子事实，别把整句话当 nugget。
 
 ## 参考资料
 
-- MemGPT: Towards LLMs as Operating Systems（https://arxiv.org/abs/2310.08560）— OS 式分层记忆与虚拟上下文管理，本讲"记忆组织"的奠基论文。
-- Cartridges: Lightweight and general-purpose long context representations via self-study（https://arxiv.org/abs/2506.06266）— 离线训练 KV cache 表示语料，self-study 合成数据 + context distillation。
-- CacheBlend: Fast LLM Serving for RAG with Cached Knowledge Fusion（https://arxiv.org/abs/2405.16444，EuroSys '25）— 跨 chunk 复用预计算 KV cache 的选择性重算系统，代码 https://github.com/LMCache/LMCache。
-- Lost in the Middle: How Language Models Use Long Contexts（https://arxiv.org/abs/2307.03172）— 长上下文模型"两头记得好、中间丢"的实证，MemGPT 的动机来源。
-- Prefix-Tuning: Optimizing Continuous Prompts for Generation（https://arxiv.org/abs/2101.00190）— Cartridge 参数化的理论来源（可训练 K/V 向量）。
-- PromptCache: Modular Attention Reuse for Low-latency Inference（https://arxiv.org/abs/2311.04934）— CacheBlend 的 full KV reuse 基线（忽略 cross-attention 的那一种）。
-- H2O: Heavy-Hitter Oracle for Efficient Generative Inference（https://arxiv.org/abs/2306.14048）— KV cache 压缩的代表作，可与 Cartridge 的"训练式压缩"对照。
-- Titans: Learning to Memorize at Test Time（https://arxiv.org/abs/2501.00663）— 用梯度下降式记忆更新的架构，Cartridges 引言里对标的最相关工作。
-- Letta（原 MemGPT，https://github.com/letta-ai/letta）— MemGPT 的开源工程化产物，agent 长期记忆框架。
-- CS329A 课程主页（https://cs329a.stanford.edu/）— Autumn 2025 课程大纲与本讲定位。
+- METR. *Measuring AI Ability to Complete Long Software Tasks*（arxiv:2503.14499）— 提出"50% 时间视野"指标，发现前沿 Agent 长任务能力每 7 个月翻倍。
+- OpenAI. *GDPval: Evaluating AI Model Performance on Real-World Economically Valuable Tasks*（arxiv:2510.04374）— 44 个职业 9 大行业的真实经济价值任务，盲评 win rate 逼近人类专家。
+- Patel et al. *DeepScholar-Bench: A Live Benchmark and Automated Evaluation for Generative Research Synthesis*（arxiv:2508.20033）— 三维 7 指标自动评测深度研究 Agent，无系统几何平均超 31%。
+- Ngo, Richard. *Clarifying and Predicting AGI*（LessWrong，2023）— METR 外推所采用的"1 个月 AGI（167 小时）"定义来源。
+- OpenAI. *Introducing SWE-bench Verified*（2024）— METR 用来做外部效度验证的行业标准软件工程 benchmark。
+- OpenAI. *evals.openai.com* — GDPval gold 子集（220 任务）与实验性自动评分服务入口。
+- DeepScholar-Bench 官方仓库：https://github.com/guestrin-lab/deepscholar-bench — live 数据管道与评测代码。
+- Rein et al. *HCAST: Human-Calibrated Autonomy Software Tasks*（forthcoming，2025）— METR 任务套件的三分之一来源。
+- Wijk et al. *RE-Bench: Evaluating Frontier AI R&D Capabilities of Language Model Agents Against Human Experts*（arxiv:2411.15114）— 8 小时 ML 研究工程任务与人类专家基线。
+- Panickssery, Bowman, Feng. *LLM Evaluators Recognize and Favor Their Own Generations*（arxiv:2404.13076）— LLM judge 自我偏好现象，GDPval 自动评分器的解释引用。

@@ -111,9 +111,9 @@ Notebook 总数：17
 
 ---
 
-## Part 3 · Agent Engineering（智能体工程）— L13, L14, L17
+## Part 3 · Agent Engineering（智能体工程）— L10, L11, L14
 
-### 13-swe-agents.ipynb — 软件工程智能体
+### 10-swe-agents.ipynb — 软件工程智能体
 
 - 1. 代码任务中的 test-time compute：CodeMonkeys
 - 2. 让 LLM 写高效内核：KernelBench
@@ -123,7 +123,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 14-agent-memory.ipynb — 智能体记忆
+### 11-agent-memory.ipynb — 智能体记忆
 
 - 1. 记忆为什么重要
 - 2. MemGPT：LLM 作为操作系统
@@ -134,7 +134,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 17-agent-evaluation.ipynb — Agent 评测与长程任务
+### 14-agent-evaluation.ipynb — Agent 评测与长程任务
 
 - 1. 评测 Agent 的难点
 - 2. 长程任务评测：Measuring Long Tasks
@@ -147,9 +147,9 @@ Notebook 总数：17
 
 ---
 
-## Part 4 · Frontiers（前沿）— L15, L16, L18-L20
+## Part 4 · Frontiers（前沿）— L12, L13, L15-L17
 
-### 15-llm-reasoning.ipynb — LLM 推理
+### 12-llm-reasoning.ipynb — LLM 推理
 
 - 1. 推理能力从哪来
 - 2. Chain-of-Thought 与自洽性
@@ -159,7 +159,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 16-alphaproof-math.ipynb — 数学推理智能体
+### 13-alphaproof-math.ipynb — 数学推理智能体
 
 - 1. 数学：推理的试金石
 - 2. AlphaGeometry：几何的神经-符号结合
@@ -169,7 +169,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 18-autonomy-agents.ipynb — 构建自治智能体
+### 15-autonomy-agents.ipynb — 构建自治智能体
 
 - 1. 从演示到自治
 - 2. 可靠性：错误检测与恢复
@@ -179,7 +179,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 19-multimodal-robotics.ipynb — 多模态机器人智能体
+### 16-multimodal-robotics.ipynb — 多模态机器人智能体
 
 - 1. 具身智能与 VLA
 - 2. 视觉-语言-动作模型
@@ -189,7 +189,7 @@ Notebook 总数：17
 - 作业
 - 参考资料
 
-### 20-future-research.ipynb — 未来研究方向
+### 17-future-research.ipynb — 未来研究方向
 
 - 1. 当前系统的边界
 - 2. 开放问题清单
@@ -201,7 +201,6 @@ Notebook 总数：17
 
 ---
 
-## 未制作的讲座
+## 课程编号
 
-- L10-L12：中期展示（Mid term presentations），无教学内容
-- L19 嘉宾 Danny Driess（Physical Intelligence）：多模态机器人智能体（已并入 19-multimodal-robotics.ipynb）
+课程按学习顺序连续编号为 L1–L17。Notebook 文件名、研读笔记目录和在线阅读器使用相同编号。

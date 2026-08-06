@@ -151,7 +151,7 @@ Self-Improving Agent Notebook
 │   ├── 11 智能体记忆
 │   └── 14 Agent 评测与长程任务
 │
-└── Part 4 · 前沿（L12-L17）         # 边界在哪里
+└── Part 4 · 前沿（L12-L13、L15-L17） # 边界在哪里
     ├── 12 LLM 推理
     ├── 13 数学推理：AlphaProof 与 AlphaGeometry
     ├── 15 构建自治智能体
@@ -186,19 +186,19 @@ Self-Improving Agent Notebook
 
 | # | Notebook | 核心问题 | 实现重点 |
 |:---:|:---|:---|:---|
-| 10 | [软件工程智能体](notebooks/part3-engineering/13-swe-agents.ipynb) | Agent 如何修复真实代码？ | 覆盖-选择、串行修复循环 |
-| 11 | [智能体记忆](notebooks/part3-engineering/14-agent-memory.ipynb) | Agent 如何记住看到过的东西？ | 分层上下文、逐出、KV 复用 |
-| 14 | [Agent 评测](notebooks/part3-engineering/17-agent-evaluation.ipynb) | 如何度量长时程 Agent？ | 评测 Harness、胜率、时间视野 |
+| 10 | [软件工程智能体](notebooks/part3-engineering/10-swe-agents.ipynb) | Agent 如何修复真实代码？ | 覆盖-选择、串行修复循环 |
+| 11 | [智能体记忆](notebooks/part3-engineering/11-agent-memory.ipynb) | Agent 如何记住看到过的东西？ | 分层上下文、逐出、KV 复用 |
+| 14 | [Agent 评测](notebooks/part3-engineering/14-agent-evaluation.ipynb) | 如何度量长时程 Agent？ | 评测 Harness、胜率、时间视野 |
 
 ### Part 4 · 前沿（12–13、15–17）
 
 | # | Notebook | 核心问题 | 实现重点 |
 |:---:|:---|:---|:---|
-| 12 | [LLM 推理](notebooks/part4-frontiers/15-llm-reasoning.ipynb) | 推理能力从哪里来？ | CoT、自洽投票、涌现度量 |
-| 13 | [数学推理](notebooks/part4-frontiers/16-alphaproof-math.ipynb) | 验证器 + 搜索如何证明定理？ | 符号引擎、证明验证器、搜索 |
-| 15 | [自治系统](notebooks/part4-frontiers/18-autonomy-agents.ipynb) | 从演示到自治之间缺什么？ | 可靠性、自检重试、监督 |
-| 16 | [多模态机器人](notebooks/part4-frontiers/19-multimodal-robotics.ipynb) | VLA 模型如何工作？ | 动作离散化、词汇表屏蔽 |
-| 17 | [未来研究方向](notebooks/part4-frontiers/20-future-research.ipynb) | 还有什么没解决？ | 开放问题、Goodhart、协调 |
+| 12 | [LLM 推理](notebooks/part4-frontiers/12-llm-reasoning.ipynb) | 推理能力从哪里来？ | CoT、自洽投票、涌现度量 |
+| 13 | [数学推理](notebooks/part4-frontiers/13-alphaproof-math.ipynb) | 验证器 + 搜索如何证明定理？ | 符号引擎、证明验证器、搜索 |
+| 15 | [自治系统](notebooks/part4-frontiers/15-autonomy-agents.ipynb) | 从演示到自治之间缺什么？ | 可靠性、自检重试、监督 |
+| 16 | [多模态机器人](notebooks/part4-frontiers/16-multimodal-robotics.ipynb) | VLA 模型如何工作？ | 动作离散化、词汇表屏蔽 |
+| 17 | [未来研究方向](notebooks/part4-frontiers/17-future-research.ipynb) | 还有什么没解决？ | 开放问题、Goodhart、协调 |
 
 ## 质量标准
 
