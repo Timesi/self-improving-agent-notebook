@@ -1,53 +1,62 @@
-# Self-Improving Agent Notebook
+# CS329A · AI Agents — Self-Improving Agent Notebook
 
-<p align="center">
-  <strong>亲手实现 AI Agent：复刻 Stanford CS329A 的 17 本可运行 Jupyter Notebook。</strong>
-</p>
+**AI Agents · Autumn 2025 · Stanford CS329A 动手实践版**
 
-<p align="center">
-  <a href="#overview">Overview</a> ·
-  <a href="#curriculum">Curriculum</a> ·
-  <a href="#quick-start">Quick Start</a> ·
-  <a href="#how-it-works">How It Works</a> ·
-  <a href="#license">License</a>
-</p>
+本仓库把 Stanford 课程 [CS329A: AI Agents](https://cs329a.stanford.edu/)（Autumn 2025）的
+每一讲做成一门可运行的动手实践 notebook。课程大纲只列出每讲的论文、不展开内容——
+这里为每一讲**先精读论文、再想象这门课的老师会怎么教、最后用代码亲手实现这节课的核心算法**。
 
-## Overview
-
-本仓库是一门 Agent 系统实践课，课程大纲**完全复刻** Stanford CS329A
-（AI Agents, Autumn 2025）。CS329A 的大纲只列出每讲的论文，没有细节内容——
-本仓库为每一讲产出一本中文教学 notebook：**先精读该讲的论文，再想象 Stanford 老师会怎么教，
-最后用可运行的代码把这节课的核心算法亲手实现出来**。
-
-教学契约与 <a href="https://github.com/walkinglabs/modern-llm-notebook">Modern LLM Notebook</a>
-保持一致：
+17 本中文 notebook，4 个 Part，教学契约与
+[Modern LLM Notebook](https://github.com/walkinglabs/modern-llm-notebook) 一致：
 
 ```text
 直觉理解 -> 手算验证 -> 代码实现 -> 实验观察
 ```
 
-每一本 notebook 都不把 Agent 当作黑盒：ReAct 循环、验证器打分、树搜索、记忆分页、评测 harness……
-核心算法全部用 numpy / torch 从零实现，LLM 只是循环里的"大脑"。
+## Schedule
 
-## Curriculum
+| 讲座 | 日期 | 主题 | Notebook | 论文与研读笔记 |
+|:---|:---|:---|:---|:---|
+| 1 | Sep 22 | Course Overview | [01-course-overview](notebooks/part1-foundation/01-course-overview.ipynb) | [notes](papers/lecture-01/NOTES.md) |
+| 2 | Sep 26 | Test-time Compute Scaling | [02-test-time-compute](notebooks/part1-foundation/02-test-time-compute.ipynb) | [notes](papers/lecture-02/NOTES.md) |
+| 3 | Sep 29 | Robust Verification | [03-robust-verification](notebooks/part1-foundation/03-robust-verification.ipynb) | [notes](papers/lecture-03/NOTES.md) |
+| 4 | Oct 3 | Learning from Feedback with Tools/Code | [04-tool-code-feedback](notebooks/part1-foundation/04-tool-code-feedback.ipynb) | [notes](papers/lecture-04/NOTES.md) |
+| 5 | Oct 6 | Multi-step Reasoning / Planning | [05-multi-step-planning](notebooks/part1-foundation/05-multi-step-planning.ipynb) | [notes](papers/lecture-05/NOTES.md) |
+| 6 | Oct 10 | Train-time Scaling / Scaling RL | [06-train-time-scaling-rl](notebooks/part2-training/06-train-time-scaling-rl.ipynb) | [notes](papers/lecture-06/NOTES.md) |
+| 7 | Oct 13 | Open-Ended Evolution of Self-Improving Agents | [07-open-ended-evolution](notebooks/part2-training/07-open-ended-evolution.ipynb) | [notes](papers/lecture-07/NOTES.md) |
+| 8 | Oct 17 | Search & Deep Research Agents | [08-search-deep-research](notebooks/part2-training/08-search-deep-research.ipynb) | [notes](papers/lecture-08/NOTES.md) |
+| 9 | Oct 20 | Post-training: from Chatbots to Agents *(guest)* | [09-post-training-evolution](notebooks/part2-training/09-post-training-evolution.ipynb) | [notes](papers/lecture-09/NOTES.md) |
+| 10-12 | Oct 24-Nov 1 | Mid term presentations | — | — |
+| 13 | Nov 3 | Agentic Frameworks for Software Engineering | [13-swe-agents](notebooks/part3-engineering/13-swe-agents.ipynb) | [notes](papers/lecture-13/NOTES.md) |
+| 14 | Nov 7 | Augmenting Agents with Memory | [14-agent-memory](notebooks/part3-engineering/14-agent-memory.ipynb) | [notes](papers/lecture-14/NOTES.md) |
+| 15 | Nov 10 | LLM Reasoning *(guest: Denny Zhou)* | [15-llm-reasoning](notebooks/part4-frontiers/15-llm-reasoning.ipynb) | [notes](papers/lecture-15/NOTES.md) |
+| 16 | Nov 14 | Superhuman Reasoning: AlphaProof & AlphaGeometry *(guest)* | [16-alphaproof-math](notebooks/part4-frontiers/16-alphaproof-math.ipynb) | [notes](papers/lecture-16/NOTES.md) |
+| 17 | Nov 17 | Agentic Evaluations & Long-Horizon Tasks | [17-agent-evaluation](notebooks/part3-engineering/17-agent-evaluation.ipynb) | [notes](papers/lecture-17/NOTES.md) |
+| 18 | Nov 21 | Building Agentic Systems for Autonomy *(guest)* | [18-autonomy-agents](notebooks/part4-frontiers/18-autonomy-agents.ipynb) | [notes](papers/lecture-18/NOTES.md) |
+| 19 | Dec 1 | Multimodal AI Agents in Robotics *(guest)* | [19-multimodal-robotics](notebooks/part4-frontiers/19-multimodal-robotics.ipynb) | [notes](papers/lecture-19/NOTES.md) |
+| 20 | Dec 5 | Future Research Areas | [20-future-research](notebooks/part4-frontiers/20-future-research.ipynb) | [notes](papers/lecture-20/NOTES.md) |
 
-| Part | 讲座 | 主题 |
+带 *guest* 的讲座为嘉宾课（原课程无指定论文），本仓库按嘉宾研究方向与相关论文补全内容。
+
+## Course Description
+
+**你会亲手实现什么**：每一本 notebook 都不把 Agent 当作黑盒。核心算法全部从零实现——
+
+| Part | 讲座 | 你会实现 |
 |:---|:---|:---|
-| Part 1 · Foundation | L1-L5 | 课程总览、Test-time Compute 缩放、鲁棒验证、工具与代码反馈、多步推理与规划 |
-| Part 2 · Training & Evolution | L6-L9 | 训练期缩放与 RL、自改进智能体的开放进化、搜索与深度研究、后训练演进 |
-| Part 3 · Agent Engineering | L13/L14/L17 | 软件工程智能体、智能体记忆、Agent 评测与长程任务 |
-| Part 4 · Frontiers | L15/L16/L18-L20 | LLM 推理、数学推理智能体、自治系统、多模态机器人、未来方向 |
-
-完整课程大纲见 [OUTLINE.md](OUTLINE.md)。论文与每讲的研读笔记见 [papers/](papers/)。
+| Part 1 · Foundation | L1-L5 | Agent 循环、重复采样与 best-of-n、验证器（ORM/PRM）、ReAct 循环与工具执行、树搜索与任务分解 |
+| Part 2 · Training & Evolution | L6-L9 | GRPO 与 RL 缩放、Agent 搜索与进化、代码采样-过滤-聚类、后训练演进 |
+| Part 3 · Engineering | L13/L14/L17 | SWE 修复循环、分层记忆与 KV 复用、Agent 评测 Harness |
+| Part 4 · Frontiers | L15/L16/L18-L20 | CoT 与自洽性、证明搜索与验证器、自治与监督、VLA 动作离散化、开放问题 |
 
 ## Quick Start
 
 ```bash
-# 创建环境（任选）
+# 1. 创建环境
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# 用 mock 模式跑通任意 notebook（无需 API key，离线可执行）
+# 2. mock 模式跑通任意 notebook（无需 API key，离线可执行）
 pip install jupyter
 jupyter nbconvert --to notebook --execute \
   notebooks/part1-foundation/02-test-time-compute.ipynb --output /tmp/out.ipynb
@@ -62,21 +71,16 @@ export AGENT_LLM_MODEL="deepseek-v4-flash"
 ```
 
 未配置 key 时，`llm_client.get_llm()` 自动返回确定性 MockLLM，notebook 依旧完整执行，
-只是 LLM 输出为占位。所有 Agent 演示代码对 mock 输出都是宽容的。
+所有 Agent 演示代码对 mock 输出都是宽容的。本仓库已内置 `llm_client.py` 统一管理两种模式。
 
-## How It Works
+## Reading
 
-**写作流程**：下载并精读每讲论文 → 产出研读笔记（`papers/lecture-XX/NOTES.md`）→
-以"Stanford 老师会怎么教"为主线写出 notebook。
+每讲的论文 PDF 与研读笔记见 [papers/](papers/)。研读笔记（`NOTES.md`）包含论文核心思想、
+关键公式与实验数字、教学主线、代码演示点子、作业点子，是每个 notebook 的直接素材。
+论文 PDF 约 150MB 不纳入版本控制，用 `python scripts/download_papers.py` 一键重新下载。
 
-**每本 notebook 的骨架**：
+## About
 
-- blockquote 承接上一讲 + 预告本节
-- 概念性章节：直觉 → 手算 → 从零实现 → 实验
-- `## 小结`：checklist 确认掌握
-- `## 作业`：3 道"填空 + assert"小作业，带小提示
-- `## 参考资料`：每篇论文链接 + 一句话说明
-
-## License
-
-待定。
+- 课程大纲复刻自 [CS329A: AI Agents](https://cs329a.stanford.edu/)（Stanford, Autumn 2025）
+- 风格与教学契约参考 [Modern LLM Notebook](https://github.com/walkinglabs/modern-llm-notebook)
+- 完整课程地图：[OUTLINE.md](OUTLINE.md) ｜ 写作规范：[.claude/CLAUDE.md](.claude/CLAUDE.md)
