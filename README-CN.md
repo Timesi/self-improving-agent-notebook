@@ -1,7 +1,7 @@
 # Self-Improving Agent Notebook
 
 <p align="center">
-  <strong>用 17 篇可运行 Jupyter Notebook，从零构建 AI Agent 系统。</strong>
+  <strong>用 17 篇可运行 Jupyter Notebook，从零构建会自我进化的 Agent 系统。</strong>
 </p>
 
 <p align="center">

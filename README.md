@@ -1,7 +1,7 @@
 # Self-Improving Agent Notebook
 
 <p align="center">
-  <strong>Build AI agents from scratch through 17 runnable Jupyter Notebooks.</strong>
+  <strong>Build self-improving agents from scratch through 17 runnable Jupyter Notebooks.</strong>
 </p>
 
 <p align="center">

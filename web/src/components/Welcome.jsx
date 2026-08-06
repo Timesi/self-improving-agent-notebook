@@ -355,10 +355,10 @@ export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onS
   }, [])
 
   const t = lang === 'zh' ? {
-    bannerBadge: '面向未来的 Agent 学习方式',
-    bannerTitleLine1: '亲手构建 AI Agent，',
-    bannerTitleLine2: '从原理到智能体。',
-    bannerDesc: 'Self-Improving Agent Notebook 通过交互式 Notebook，带你从零实现 Agent 的核心算法与系统。',
+    bannerBadge: '从零构建自进化 Agent',
+    bannerTitleLine1: '亲手构建自进化 Agent，',
+    bannerTitleLine2: '从原理到自我进化。',
+    bannerDesc: 'Self-Improving Agent Notebook 通过交互式 Notebook，带你从零实现会自我进化的 Agent：循环、验证、规划、强化学习与记忆。',
     startBtn: '开始学习',
     browsePath: '浏览学习路径',
     readerLetter: '给读者的一封信',
@@ -384,9 +384,9 @@ export default function Welcome({ catalog, lang, onLanguageChange, onSelect, onS
     modelscopeDesc: '模型托管与开源支持',
   } : {
     bannerBadge: 'Future-Ready LLM Learning Method',
-    bannerTitleLine1: 'Build AI Agents,',
-    bannerTitleLine2: 'From Theory to Agents.',
-    bannerDesc: 'Self-Improving Agent Notebook guides you into core agent algorithms and systems via interactive Notebooks.',
+    bannerTitleLine1: 'Build Self-Improving Agents,',
+    bannerTitleLine2: 'From Theory to Self-Evolution.',
+    bannerDesc: 'Self-Improving Agent Notebook guides you into self-improving agents — loops, verifiers, planning, RL, and memory — via interactive Notebooks.',
     startBtn: 'Start Learning',
     browsePath: 'Browse Pathways',
     readerLetter: 'A Letter to Readers',
