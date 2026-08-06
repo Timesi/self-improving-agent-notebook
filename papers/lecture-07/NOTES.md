@@ -88,7 +88,7 @@
 
 1. **用一个简单评分函数做 agent 参数搜索**：数据用一小批算术题（如 100 道两位乘法，答案可程序校验）。把"agent"定义为一组可调参数（COT 步数、是否做 self-consistency、采样温度、集成个数），跑一个随机搜索/爬山，fitness 是验证集准确率。用 matplotlib 画 fitness vs 迭代曲线。期望输出：曲线上升，且能看出"多个候选 + 集成"组合确实更好。这是 ADAS 的降维版，无 LLM 也能跑。
 
-2. **最小的 ADAS 循环（meta agent 写 agent）**：把每个 agent 表示成一个 `forward(task) -> str` 函数，维护一个 archive（dict：名字 → 代码 + 得分）。让 LLM（llm_client 的 mock 或真实 API）读 archive 摘要 + 评测结果，生成一个新 idea 的 `forward()` 代码；用 `exec` 解析成可调用函数；在算术任务评测集上打分；分数达标才入库。重复 3-5 轮，打印每轮的 archive 摘要，观察"后来的 agent 名字里开始借鉴前面的组件"。mock 模式下允许 LLM 只做确定性脚本化输出（如固定的几段 agent 代码），演示逻辑不受影响。
+2. **最小的 ADAS 循环（meta agent 写 agent）**：把每个 agent 表示成一个 `forward(task) -> str` 函数，维护一个 archive（dict：名字 → 代码 + 得分）。让 LLM（llm_client 的 脚本化 或真实 API）读 archive 摘要 + 评测结果，生成一个新 idea 的 `forward()` 代码；用 `exec` 解析成可调用函数；在算术任务评测集上打分；分数达标才入库。重复 3-5 轮，打印每轮的 archive 摘要，观察"后来的 agent 名字里开始借鉴前面的组件"。脚本化 模式下允许 LLM 只做确定性脚本化输出（如固定的几段 agent 代码），演示逻辑不受影响。
 
 3. **AI Scientist 式 idea→实验→评审的最小实现**：给一个小训练脚本（如 sklearn 逻辑回归或 torch 两层的玩具回归），LLM 提出 idea（例如"把学习率调低 / 加正则 / 换优化器"），脚本据此改超参跑一次实验得到指标 dict（如 val_loss）；再让一个 LLM reviewer 读指标 + idea 描述，输出 (novelty, soundness, overall) 与 accept/reject。把通过的 idea 存进 archive，跑 3 轮。期望输出：idea-archive 表格 + 每轮评分，让读者直观看到"评审打分 → 筛选 idea"这一闭环。
 

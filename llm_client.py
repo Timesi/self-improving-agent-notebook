@@ -23,7 +23,6 @@ class LLMClient:
         self.api_key = api_key or os.environ.get("AGENT_LLM_API_KEY") or os.environ.get("ANTHROPIC_API_KEY")
         self.model = model or os.environ.get("AGENT_LLM_MODEL") or DEFAULT_MODEL
         self.temperature = temperature
-        self.is_mock = False
 
     def chat(self, messages, temperature=None, max_tokens=1024):
         """messages：形如 [{"role": "user", "content": "..."}] 的消息列表。返回回复文本。"""

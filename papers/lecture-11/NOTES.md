@@ -43,10 +43,10 @@
 - **与课程主题的关系**：本文给出"记忆"的第一个答案——**分层的、由 Agent 自己管理的记忆**。它定义了 agent 记忆的标准词汇表（main/external context、working memory、recall/archival storage、eviction、递归摘要、内存压力警告），是整讲的概念地基。它与课程先前的工具调用（L04）和 ReAct 循环（L05）自然衔接：函数调用从"操作外部世界"延伸到"操作自己的记忆"。
 
 - **可演示的代码点**：
-  - 从零实现记忆层级数据结构（working context / FIFO queue / recall storage）与队列管理器，用 mock LLM 走完"内存压力 → 保存 → flush → 递归摘要"。
+  - 从零实现记忆层级数据结构（working context / FIFO queue / recall storage）与队列管理器，用 脚本化 LLM 走完"内存压力 → 保存 → flush → 递归摘要"。
   - 实现函数执行器 + 简单的函数 schema，模拟 `working_context.replace("Boyfriend named James", ...)` 这类自定向改写。
   - 复现"memory pressure"阈值逻辑：70% 警告、100% flush、逐出 50%、生成递归摘要，可视化 main context 恒定有界。
-  - 用 MockLLM + 脚本化函数调用演示多会话一致性问题（DMR 的简化版）。
+  - 用 脚本化LLM + 脚本化函数调用演示多会话一致性问题（DMR 的简化版）。
 
 ### 论文 2：Cartridges: Lightweight and general-purpose long context representations via self-study（arxiv:2506.06266，cartridges.pdf）
 
@@ -122,7 +122,7 @@
 
 ## 代码演示点子（3-6 个）
 
-1. **从零实现 MemGPT 式分层记忆循环**：用 Python 实现 memory hierarchy（working context + FIFO queue + recall storage）+ 函数执行器，走 llm_client（mock 模式给脚本化轨迹）。关键思路：队列管理器按 token 计数插入 memory-pressure 系统消息（70%）、超限 flush（100%）并生成递归摘要；函数调用按 schema 校验后执行并回喂。期望输出：多轮对话后 main context 的 token 数始终 ≤ 预算，且旧信息可经 recall_storage.search 找回。
+1. **从零实现 MemGPT 式分层记忆循环**：用 Python 实现 memory hierarchy（working context + FIFO queue + recall storage）+ 函数执行器，走 llm_client（脚本化 模式给脚本化轨迹）。关键思路：队列管理器按 token 计数插入 memory-pressure 系统消息（70%）、超限 flush（100%）并生成递归摘要；函数调用按 schema 校验后执行并回喂。期望输出：多轮对话后 main context 的 token 数始终 ≤ 预算，且旧信息可经 recall_storage.search 找回。
 2. **可视化"逐出 + 递归摘要"的预算演化**：给一个固定 context budget，逐步 append 消息，画"main context 占用 vs 轮次"曲线，标注 warning/flush 点，展示每一轮 flush 后占用回落；把递归摘要的内容打印出来，让学生看到信息被压缩而非删除。数据用玩具脚本消息即可，不依赖 LLM。
 3. **从零实现最小 Cartridge（prefix-tuning）训练**：用 torch 从零实现一个小的因果自注意力语言模型（或加载小模型），冻结全部权重，只训练 p 个可训练 K/V 向量。在玩具语料（如几段"人物档案"）上对比两种目标：NTP on corpus（只会背诵）vs context-distillation（KL 对齐教师分布，能回答合成问题）。期望输出：背诵损失更低的 Cartridge 答不了问题，而蒸馏出的 Cartridge 能答——直观复现论文 Figure 3 左图。
 4. **手算 KV cache 复用与选择性重算**：构造两 chunk 输入（类似 Messi/Ronaldo），用 numpy 手算三种方案的注意力矩阵/前向注意力偏差（full recompute vs full reuse vs 只重算 HKVD token）。再实现 HKVD 选择 + 渐进筛选：给定相邻两层 KV deviation 矩阵，选 top-r% token，计算 Spearman 秩相关验证层间一致性（Insight 2）。期望输出：一张注意力热图 + 三条 deviation 曲线。
@@ -131,7 +131,7 @@
 
 ## 作业点子（3 个）
 
-1. **实现 MemGPT 队列逐出策略**：填空实现 `should_warn(tokens, budget)`、`should_flush(tokens, budget)` 与递归摘要更新，assert 每轮后 `len(main_context) <= budget`。考察：70%/100% 阈值、50% 逐出、摘要替换的语义。小提示：把"逐出的消息"接在旧摘要后面再喂给 mock LLM 生成新摘要。
+1. **实现 MemGPT 队列逐出策略**：填空实现 `should_warn(tokens, budget)`、`should_flush(tokens, budget)` 与递归摘要更新，assert 每轮后 `len(main_context) <= budget`。考察：70%/100% 阈值、50% 逐出、摘要替换的语义。小提示：把"逐出的消息"接在旧摘要后面再喂给 脚本化 LLM 生成新摘要。
 2. **HKVD token 选择与层间相关性**：填空实现 `top_r_percent(kv_dev, r)` 选出每层 HKVD token，并用 `spearman` 计算相邻两层 deviation 秩相关；assert 相关性高于给定阈值、且重算 HKVD 后 attention deviation 低于重算低 deviation token。考察：Insight 1/2 的直接落地。
 3. **context-distillation 目标填空**：填空补全 `d_kl` 项：`D_KL(F_teacher || F_student)`，其中教师 logits 来自"语料在 context"、学生 logits 来自"Cartridge 版本"，然后与 NTP 损失对比梯度方向；assert 蒸馏损失在"面对问题"时低于 NTP 损失。考察：对"对齐分布"而非"背诵文本"的理解。
 

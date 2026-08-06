@@ -61,7 +61,7 @@
 
 - **可演示的代码点**：
   - 从零实现 `Node`（state/visits/value/children）+ UCT 选择 + backprop，不依赖任何 Agent 框架。
-  - 在一个可判定的环境（如 Game of 24：给 4 个数用 +−×÷ 凑 24）上跑简化 LATS：环境反馈本身就给出 reward，mock LLM 只负责生成候选算式。
+  - 在一个可判定的环境（如 Game of 24：给 4 个数用 +−×÷ 凑 24）上跑简化 LATS：环境反馈本身就给出 reward，脚本化 LLM 只负责生成候选算式。
   - 可视化搜索树（每轮选哪个节点、奖励如何回传），直观看到探索与利用的交替。
 
 ### 论文 2：ADaPT — As-Needed Decomposition and Planning（arxiv:2311.05772，adapt.pdf）
@@ -84,7 +84,7 @@
 
 - **可演示的代码点**：
   - 写一个可配置深度的合成任务（模拟 TextCraft 式配方树），对比三种策略的展开：ReAct（一条长路径）、Plan-and-Execute（一次性全拆）、ADaPT（失败才拆）。
-  - 实现递归 controller：解析 mock LLM 输出的 AND/OR 计划，按逻辑组合子任务结果。
+  - 实现递归 controller：解析 脚本化 LLM 输出的 AND/OR 计划，按逻辑组合子任务结果。
   - 画"调用树"：展示 ADaPT 只在某条子路径上深入展开，而 plan-and-execute 全程统一深度。
 
 ### 论文 3：SPRINT — Interleaved Planning and Parallelized Execution（arxiv:2506.05745，sprint.pdf）
@@ -112,7 +112,7 @@
 - **可演示的代码点**：
   - 手写一张 step 依赖表（或从脚本化轨迹解析），实现 $\sigma(S_i)$ 的阶段划分，把同阶段步骤并行化，计算顺序 token 与串行的对比。
   - 用 networkx 画依赖 DAG，展示 plan-only 父节点优化如何把子节点并入同一阶段。
-  - 用 mock LLM 模拟一次"plan→并行执行→sync"的滚动循环，数每个阶段的最长路径 token，直观看出延迟来源。
+  - 用 脚本化 LLM 模拟一次"plan→并行执行→sync"的滚动循环，数每个阶段的最长路径 token，直观看出延迟来源。
 
 ### 论文 4：Wider or Deeper? — Adaptive Branching Tree Search（AB-MCTS，arxiv:2503.04412，wider-or-deeper.pdf）
 
@@ -136,7 +136,7 @@
 - **与课程主题的关系**：这篇回答整讲最关键的"如何选择"问题——到底该加宽还是加深？答案不是固定策略，而是一个**每节点在线决策**（贝叶斯后验采样）。它是 LATS 的"下一代"：同样做 MCTS，但把 LATS 里"展开 $n$ 个孩子"的固定超参数换成自适应分支。对本讲教学而言，它是从"会搜索"到"会自适应地搜索"的一步，也点出 UCT 公式在 LLM 场景（臂动态生成）下的局限。
 
 - **可演示的代码点**：
-  - 实现一个 mini 版自适应分支：两个动作（GEN / 细化），每个动作维护 Beta(α, β) 后验，用 Thompson sampling 选动作，在 mock 打分器上跑若干轮，画出选择轨迹。
+  - 实现一个 mini 版自适应分支：两个动作（GEN / 细化），每个动作维护 Beta(α, β) 后验，用 Thompson sampling 选动作，在 脚本化 打分器上跑若干轮，画出选择轨迹。
   - 对比三种策略的树形（纯加宽 / 纯加深 / 自适应）在同一个合成打分环境下的表现曲线。
   - 手算演示"为什么 UCT 不适用"：构造一个动态生成新臂的场景，比较 UCB 与 Thompson sampling 的行为。
 
@@ -164,7 +164,7 @@
 - **与课程主题的关系**：这篇把"规划"从推理时搬进训练时，是整讲的收束与转折。LATS/ADaPT 用搜索和分解帮"推理时的 LLM"规划，SWiRL 用 RL 让模型"自己学会"规划——两条路殊途同归（SPRINT 的 SFT 训练也属于第二条路）。它的 step-wise 分解思想（把轨迹切成前缀）与 ADaPT 的按需分解、LATS 的价值函数（用 LLM 打分）一脉相承，但用在训练信号上。SWiRL 和 L6 之后的"RL 缩放"、"后训练演进"直接衔接，是 Part 1 通向 Part 2 的桥梁。
 
 - **可演示的代码点**：
-  - 用 mock LLM 生成若干条脚本化多步轨迹，实现"子轨迹分解"（k 步 → k 条前缀），再套一个 mock 的 process 打分器，复现"process 过滤 vs outcome 过滤"在数据混合上的差异。
+  - 用 脚本化 LLM 生成若干条脚本化多步轨迹，实现"子轨迹分解"（k 步 → k 条前缀），再套一个 脚本化 的 process 打分器，复现"process 过滤 vs outcome 过滤"在数据混合上的差异。
   - 用 toy 策略（小 softmax 分类器）演示"逐步奖励 vs 只给最后一步奖励"带来的梯度差异（可简化成加权更新）。
   - 统计"SWiRL 在只有正确 / 只有错误 / 混合结局数据上的表现"，直观看到 RL 不排斥错误结局样本。
 
@@ -186,19 +186,19 @@
 
 ## 代码演示点子（4-6 个）
 
-所有演示遵守项目约定：统一走 `llm_client.py` 的 `get_llm()`，mock 模式下 LLM 输出是脚本化轨迹，算法逻辑（树、分解、打包、采样）仍必须完整跑通；核心算法用 numpy 从零实现。
+所有演示遵守项目约定：统一走 `llm_client.py` 的 `get_llm()`，脚本化 模式下 LLM 输出是脚本化轨迹，算法逻辑（树、分解、打包、采样）仍必须完整跑通；核心算法用 numpy 从零实现。
 
 1. **手算 UCT 选择公式（numpy，无需 LLM）**：给一棵手写的小树（根节点带 4 个子节点，各有 N 和 V），实现 `uct = V + w*sqrt(ln(N_parent)/N_child)`，打印每个子节点的 UCT，并选出下一个要展开的节点。改变探索权重 w 观察选择变化。期望输出：一张 UCT 数值表 + 被选节点。
 
-2. **从零实现简化 LATS（mock LLM 兼容）**：实现 `Node`（state、visits、value、children）与六个操作的最小版——UCT 选择、用 `get_llm()` 采样 n 个候选动作（mock 模式返回脚本化候选）、环境判 reward（如 Game of 24 判定算式是否等于 24）、backprop 更新、失败时存一条 reflection 文本。跑 20 轮后输出：最优路径、树规模、每轮选中的节点序列。关键设计：reward 来自环境判定而非 LLM 打分，保证 mock 也能跑；LLM 只负责"出候选动作"，解析时对 mock 的脚本化输出宽容。
+2. **从零实现简化 LATS（脚本化 LLM 兼容）**：实现 `Node`（state、visits、value、children）与六个操作的最小版——UCT 选择、用 `get_llm()` 采样 n 个候选动作（脚本化 模式返回脚本化候选）、环境判 reward（如 Game of 24 判定算式是否等于 24）、backprop 更新、失败时存一条 reflection 文本。跑 20 轮后输出：最优路径、树规模、每轮选中的节点序列。关键设计：reward 来自环境判定而非 LLM 打分，保证 脚本化 也能跑；LLM 只负责"出候选动作"，解析时对 脚本化 的脚本化输出宽容。
 
-3. **ADaPT 按需分解的可视化对比**：做一个可配置深度的合成配方环境（目标物品→子物品→再子物品，某个分支设成"executor 必失败"）。用 mock LLM 作为 executor（返回 completed/failed）与 planner（返回 AND/OR 计划），分别跑 ReAct（一条长路径）、Plan-and-Execute（一次全拆）、ADaPT（失败才拆，dmax=3）。输出：三种策略的调用树（每层谁调了谁）+ 各自动作步数，直观看到 ADaPT 只在坏分支上深入。
+3. **ADaPT 按需分解的可视化对比**：做一个可配置深度的合成配方环境（目标物品→子物品→再子物品，某个分支设成"executor 必失败"）。用 脚本化 LLM 作为 executor（返回 completed/failed）与 planner（返回 AND/OR 计划），分别跑 ReAct（一条长路径）、Plan-and-Execute（一次全拆）、ADaPT（失败才拆，dmax=3）。输出：三种策略的调用树（每层谁调了谁）+ 各自动作步数，直观看到 ADaPT 只在坏分支上深入。
 
 4. **SPRINT 的 DAG 打包与顺序 token 计算**：给一张手写的步骤依赖表（如"算 A 子式"、"验算"、"反思"等，含 plan-only 步骤），实现 $\sigma(S_i)$ 阶段号公式，把同阶段步骤打包；假设每个步骤有给定的 token 数，分别按串行与并行计算顺序 token（并行 = 每阶段取最长那路）。用 networkx 画 DAG，标注阶段划分。期望输出：阶段分组 + 串行/并行 token 对比条形图，演示 plan-only 父节点把子节点并入同一阶段的优化。
 
-5. **自适应深宽选择（Thompson sampling 迷你版，Beta 共轭）**：一个简化 AB-MCTS——每个节点只有两个动作：GEN（生成新答案）和 Refine（细化已有答案）。给每个动作维护 Beta(α, β) 后验，从各动作后验采样分数、取最大者执行；mock 打分器返回 0/1 分数并回传更新后验。跑 50 轮，画出"加宽次数 vs 加深次数"以及选择轨迹，对比"纯加宽（repeated sampling）"和"纯加深（sequential refinement）"在合成环境上的表现曲线。
+5. **自适应深宽选择（Thompson sampling 迷你版，Beta 共轭）**：一个简化 AB-MCTS——每个节点只有两个动作：GEN（生成新答案）和 Refine（细化已有答案）。给每个动作维护 Beta(α, β) 后验，从各动作后验采样分数、取最大者执行；脚本化 打分器返回 0/1 分数并回传更新后验。跑 50 轮，画出"加宽次数 vs 加深次数"以及选择轨迹，对比"纯加宽（repeated sampling）"和"纯加深（sequential refinement）"在合成环境上的表现曲线。
 
-6. **SWiRL 风格的数据分解与过滤**：用 mock LLM 生成若干条脚本化多步轨迹（含 search/answer 动作标签），实现"k 步轨迹 → k 条前缀子轨迹"的分解；写一个 mock 的 process 打分器（对"每步是否合理"给 0/1）与 outcome 判定（末步是否匹配 golden），统计四种过滤策略（不过滤/process/outcome/process+outcome）各自保留的样本数与标签构成。期望输出：过滤对比表，说明"process-only 保留正反例混合"，呼应论文"RL 能从错误结局样本学习"。
+6. **SWiRL 风格的数据分解与过滤**：用 脚本化 LLM 生成若干条脚本化多步轨迹（含 search/answer 动作标签），实现"k 步轨迹 → k 条前缀子轨迹"的分解；写一个 脚本化 的 process 打分器（对"每步是否合理"给 0/1）与 outcome 判定（末步是否匹配 golden），统计四种过滤策略（不过滤/process/outcome/process+outcome）各自保留的样本数与标签构成。期望输出：过滤对比表，说明"process-only 保留正反例混合"，呼应论文"RL 能从错误结局样本学习"。
 
 ## 作业点子（3 个）
 

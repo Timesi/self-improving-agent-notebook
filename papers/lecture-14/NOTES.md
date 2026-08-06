@@ -60,7 +60,7 @@
 - **可演示的代码点**：
   - 从零实现 win rate 统计与一致率：给定合成评分数据，算 win rate、$A^{\text{HA}}$、$A^{\text{HH}}$，比较"自动评分器"和"人类"。
   - 实现 try-n-then-fix 的期望成本公式并画曲线：看 win rate 多高时模型协助才划算（交叉点分析）。
-  - 演示盲评打分流程：用 mock LLM 生成两个交付物描述，让"人类 judge"（脚本或 mock）成对打分，理解 0/0.5/1 三值评分。
+  - 演示盲评打分流程：用 脚本化 LLM 生成两个交付物描述，让"人类 judge"（脚本或 脚本化）成对打分，理解 0/0.5/1 三值评分。
 
 ### 论文 3：DeepScholar-Bench: A Live Benchmark and Automated Evaluation for Generative Research Synthesis（arxiv:2508.20033，deepscholar-bench.pdf）
 - **核心思想**：评测"深度研究/生成式研究综述"这类长程 Agent 的新 benchmark。真实研究综述任务是"开放式的、正确性没有唯一标准、依赖实时网络检索"的，而既有 QA benchmark 只测短答案、专家手工标注集又会过时和被污染。DeepScholar-Bench 用**持续更新的数据管道**从近期高质量 arXiv 论文自动生成 query（任务：给定论文标题+摘要，生成 related work 一节，人类作者写的原文就是 exemplar），并提出**三维 7 指标的全自动评测**：知识综合（organization & coherency、nugget coverage）、检索质量（relevance rate、reference coverage、document importance）、可验证性（citation precision、claim coverage）。全部指标用 LLM judge 实现，并与人类评分校准。结论：**所有系统几何平均都低于 31%，benchmark 远未饱和**，连 OpenAI DeepResearch 的最佳指标（nugget coverage 39.2%）离饱和也很远。
@@ -81,8 +81,8 @@
   - LLM judge 校准（11 名 CS 博士、300+ 条标注）：Organization 成对比较与人类一致率 71.43%，nugget 标注 83.33%，reference importance 65.9%——LLM judge 在长文档任务上可用但仍非完美。
 - **与课程主题的关系**：这是"自动评测可靠性与漏洞"的正面示范：用 LLM judge 支撑 7 个指标，却必须一一与人类校准、考虑位置偏差；同时"live benchmark + 防污染"是针对"benchmark 饱和/数据泄漏"问题的工程化答案，呼应 METR 对 benchmark 饱和的批评。它也是第 5 节"构建自己的评测 harness"的模板。
 - **可演示的代码点**：
-  - 从零实现几个指标：给定一组 mock 引文（含被引次数、相关度标签、claims），算 RR、RC、DI，理解各指标对"好的综述"不同侧面的刻画。
-  - 实现 nugget coverage：用 mock LLM 从 exemplar 提取 nugget，再判断生成报告是否覆盖。
+  - 从零实现几个指标：给定一组 脚本化 引文（含被引次数、相关度标签、claims），算 RR、RC、DI，理解各指标对"好的综述"不同侧面的刻画。
+  - 实现 nugget coverage：用 脚本化 LLM 从 exemplar 提取 nugget，再判断生成报告是否覆盖。
   - LLM judge 位置偏差演示：同一对答案正反两序各评一次，统计不一致率，再看"swap 平均"如何消除偏差。
   - 几何平均聚合：解释为什么"用几何平均而不用算术平均"（任何维度得 0 都会拖垮总分，不允许单项摆烂）。
 
@@ -92,22 +92,22 @@
 2. **第一篇 METR 建立"标尺"：把能力换成人类时间。** 老师会先讲一个直观类比：就像用"人类跑完要多久"来度量赛道的难度。然后拆解三步：构造秒级到 8 小时的任务套件 → 找 800+ 人类基线测时长（几何平均）→ 对每个模型做 logistic 拟合得到 50% time horizon。亲手带读者算一遍 logistic：为什么 $h_{\text{agent}}=t_{\text{task}}$ 时成功率是 0.5。最后亮出那张"每 7 个月翻一倍"的对数曲线，并强调**斜率比单个模型的绝对高度更可信**（误差高度相关）。卡点提示：读者容易把"任务时长"误当"模型运行时长"；要强调时长是人做的、成功率是 AI 做的，两者通过模型拼起来。
 3. **从时间到钱：GDPval 换一个标尺。** 承接："METR 告诉你活儿有多长，没告诉你活儿值多少钱、做得像不像样。" 讲 GDPval 如何自顶向下选职业（9 大行业 × 每行业薪酬前 5 的职业）、如何由专家造任务并给任务标"美元价值 = 时长 × 时薪"。核心演示是**盲评 win rate** 的机制：成对、匿名、专家判 0/0.5/1。在这里老师会埋一个伏笔：真专家打分太贵（一次对比 >1 小时），于是他们训练了一个自动评分器——只有 66% 和人类一致，这自然引出第三篇。
 4. **自动评测的可靠性与漏洞：DeepScholar-Bench 收尾。** 讲"既然人太贵，就让 LLM 打分"，但三个坑逐个示范：LLM judge 有位置偏差（所以要成对交换顺序取平均）、模型偏好自己的产出（GDPval 里自动评分器对强模型一致率更低）、评测本身的"正确性"需要再评测（DeepScholar 拿 300+ 条人类标注校准 71%/83%/66% 的一致率）。最后用 DeepScholar 的三维 7 指标把"好的深度研究"拆解，用 oracle 实验点出"瓶颈在综合而非检索"。**收束全讲的一句话**：评测长程 Agent 难在四个环节各有一层误差——任务分布是否真实、成功判据是否唯一、自动评分器是否可靠、以及这些误差本身是否被校准过。
-5. **落到动手：让读者自己写一个 eval harness。** 用 mock 环境把上面每个指标跑一遍（时间视野拟合、win rate、一致率、nugget coverage），体会"评测一个评测"和"评测一个 Agent"是同一件事。
+5. **落到动手：让读者自己写一个 eval harness。** 用 脚本化 环境把上面每个指标跑一遍（时间视野拟合、win rate、一致率、nugget coverage），体会"评测一个评测"和"评测一个 Agent"是同一件事。
 
 ## 代码演示点子（3-6 个）
 
-1. **从零实现一个 Agent 评测 harness**：定义一个小任务池（如"改写函数 + 单测自动打分"），用 `llm_client` 的 mock 模式跑 N 次，统计成功率、逐步构造"任务池定义 → 运行 → 二元化 → 聚合"的最小闭环。期望输出：每个任务的 success/fail 表与平均成功率，让读者看到"评测 harness = 环境 + 评分函数 + 聚合统计"。
+1. **从零实现一个 Agent 评测 harness**：定义一个小任务池（如"改写函数 + 单测自动打分"），用 `llm_client` 的 脚本化 模式跑 N 次，统计成功率、逐步构造"任务池定义 → 运行 → 二元化 → 聚合"的最小闭环。期望输出：每个任务的 success/fail 表与平均成功率，让读者看到"评测 harness = 环境 + 评分函数 + 聚合统计"。
 2. **长任务的时间-完成率曲线与 time horizon 拟合**：构造合成数据 `tasks = [(log_time, true_rate)]`，用 `scipy.optimize` 或手写梯度下降拟合 $p=\sigma((\log h-\log t)\cdot\beta)$，输出拟合的 $h$（50% 时间视野），并画出数据点+拟合曲线，标注"该模型 50% 成功率对应的人类时长"。再对多个"模型"（不同 $h$）做 OLS，画 $\log h$ vs 时间的直线，报翻倍天数。
 3. **Win rate 与评分一致率计算**：给几组 {model, human, tie} 三值评分模拟数据，计算模型 win rate，再实现 $A^{\text{HA}}_s=E[1-|H-A|]$ 与 $A^{\text{HH}}_s=E[1-|H_1-H_2|]$，对比"自动评分器 vs 人类"和"人类 vs 人类"两条基线，复现 GDPval 的"66% vs 71%"结构。
-4. **LLM judge 偏差演示**：让 mock/真实 LLM 对同一对答案做正反两序成对比较，统计位置偏差（正反不一致的比例）；再演示"swap 平均"如何把偏差对 win rate 的影响消掉，以及"自我偏好"（judge 更容易选与自己风格/模型同源的输出）。
+4. **LLM judge 偏差演示**：让 脚本化/真实 LLM 对同一对答案做正反两序成对比较，统计位置偏差（正反不一致的比例）；再演示"swap 平均"如何把偏差对 win rate 的影响消掉，以及"自我偏好"（judge 更容易选与自己风格/模型同源的输出）。
 5. **Try-n-then-fix 的成本-收益曲线**：用公式 $E[T_n]=(M_T+R_T)\frac{1-(1-w)^n}{w}+(1-w)^n H_T$，固定 $M_T,R_T,H_T$，扫 $w$（模型质量）和 $n$（尝试次数），画"总时间 vs win rate"曲线，找模型 win rate 超过多少、模型协助才比纯人工划算（交叉点），直观展示"naive 327x 为什么失真"。
-6. **检索质量三维指标 + oracle 消融**：给一组 mock 引文（每条带 related/important/被引次数/对应 claim），实现 RR、RC、DI；再模拟"把 oracle 的重要文献直接喂给系统"，看 RC 拉满而 nugget coverage 没跟着涨，复现"瓶颈在综合而非检索"的结论。
+6. **检索质量三维指标 + oracle 消融**：给一组 脚本化 引文（每条带 related/important/被引次数/对应 claim），实现 RR、RC、DI；再模拟"把 oracle 的重要文献直接喂给系统"，看 RC 拉满而 nugget coverage 没跟着涨，复现"瓶颈在综合而非检索"的结论。
 
 ## 作业点子（3 个）
 
 1. **拟合 time horizon**：给一张"任务人类时长 + 各模型每任务成功率"的小表，要求用 scipy 拟合 logistic 求出某模型的 $h$ 和 $\beta$，再断言 `abs(h_est - 真值) < 容差`、以及 $h=t_{\text{task}}$ 时预测成功率约等于 0.5。小提示：先对时长取 log 再做 logistic 回归；目标函数是负对数似然。
 2. **实现 win rate 与一致率**：给一份 {model_grade, human1_grade, human2_grade} 的评分表，要求计算该模型的 win rate、$A^{\text{HA}}$、$A^{\text{HH}}$，断言自动评分器"没人类彼此之间一致"且"对弱模型更一致"。小提示：$|H-A|$ 只在 H 与 A 都是 0/0.5/1 的三值时才直接算，先想清楚 tie 该记成什么。
-3. **实现 nugget coverage**：给一个人类 exemplar 的 n 个 nugget 和一个 mock 生成报告的句子列表，用简单关键词/嵌入相似度或 mock LLM 判断每个 nugget 是否出现，算覆盖比例，断言"报告 B 覆盖更全所以分更高"。小提示：nugget 是"essential fact"级别的原子事实，别把整句话当 nugget。
+3. **实现 nugget coverage**：给一个人类 exemplar 的 n 个 nugget 和一个 脚本化 生成报告的句子列表，用简单关键词/嵌入相似度或 脚本化 LLM 判断每个 nugget 是否出现，算覆盖比例，断言"报告 B 覆盖更全所以分更高"。小提示：nugget 是"essential fact"级别的原子事实，别把整句话当 nugget。
 
 ## 参考资料
 

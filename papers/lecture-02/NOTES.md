@@ -78,7 +78,7 @@
 - **可演示的代码点**：
   - 用合成数据模拟 best-of-N vs 不同 sequential/parallel 比例，画"预算→精度"曲线族。
   - 难度分 bin：对每个问题按 pass@1 排序分 5 档，展示每档最优策略不同。
-  - 实现简版 beam search（PRM 用 mock 打分器），对比 best-of-N。
+  - 实现简版 beam search（PRM 用 脚本化 打分器），对比 best-of-N。
   - FLOPs-matched 可视化：画 14x 大模型"星标"在 R=0.16/0.79/22 三条 x 轴位置上的高低。
 
 ### 论文 3：Archon: An Architecture Search Framework for Inference-Time Techniques（arxiv:2409.15254，`archon.pdf`，注意正确 ID）
@@ -109,9 +109,9 @@
 - **与课程主题的关系**：把本讲前面所有散点技术（采样、修订、验证、投票）**统一进一个可搜索的系统空间**，并用自动搜索替代手工搭系统。它是"test-time compute 组合拳"的工程化终点，也为 Agent 的"自动设计架构"提供了模板。
 
 - **可演示的代码点**：
-  - 用 `llm_client`（mock 模式）手动搭一个 Generator(3)→Critic→Ranker(top-2)→Fuser 的小流水线，对比单次调用。
+  - 用 `llm_client`（脚本化 模式）手动搭一个 Generator(3)→Critic→Ranker(top-2)→Fuser 的小流水线，对比单次调用。
   - 在简化搜索空间（比如只调 top-K 与 fusion 层数两个超参）上实现"随机搜索 vs 网格搜索"，展示 Archon 的搜索思想。
-  - 做一个"单位测试筛选器"：mock LLM 生成测试语句 + 打分，观察通过率对最终答案的影响。
+  - 做一个"单位测试筛选器"：脚本化 LLM 生成测试语句 + 打分，观察通过率对最终答案的影响。
 
 ### 论文 4：How Do Large Language Monkeys Get Their Power (Laws)?（arxiv:2502.17578，`monkey-laws.pdf`，注意正确 ID）
 
@@ -172,7 +172,7 @@
 
 6. **FLOPs-matched 大小模型对比（简化）**：用 `FLOPs ≈ 2N·tokens` 画"小模型+test-time compute" vs "14x 大模型 greedy"，x 轴按 $R = D_{infer}/D_{train}$ 的三种取值（0.16/0.79/22）放"大模型星标"，看星标落在线上（test-time 更优）还是线下。**关键观察**：R 小（self-improvement 场景）test-time 更划算，R 大（部署场景）pretraining 更划算。
 
-> 演示实现建议：以上 1–5 全部可用 numpy 合成数据**离线完整执行**（mock 模式兼容，符合 CLAUDE.md 要求）；若想用真实 LLM，可用 `llm_client.get_llm()` 在 GSM8K 小样本上做真采样（real 模式），并把 mock 输出标为占位。演示 4、5 不依赖真实 LLM 即可给出与论文一致的趋势。
+> 演示实现建议：以上 1–5 全部可用 numpy 合成数据**离线完整执行**（脚本化 模式兼容，符合 CLAUDE.md 要求）；若想用真实 LLM，可用 `llm_client.get_llm()` 在 GSM8K 小样本上做真采样（real 模式），并把 脚本化 输出标为占位。演示 4、5 不依赖真实 LLM 即可给出与论文一致的趋势。
 
 ## 作业点子（3 个）
 

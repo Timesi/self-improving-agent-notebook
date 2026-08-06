@@ -17,7 +17,7 @@
   <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C">
   <img alt="Notebooks" src="https://img.shields.io/badge/Notebooks-17-orange">
   <img alt="Language" src="https://img.shields.io/badge/Language-Chinese-2ea44f">
-  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20Mock-4b32c3">
+  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20脚本化-4b32c3">
 </p>
 
 <p align="center">

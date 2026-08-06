@@ -249,7 +249,7 @@ function AppContent() {
       {
         'target': '[data-tour="features"]',
         'title': '课程特色',
-        'body': '浏览器内直接渲染 Notebook，无需配置环境。支持 mock 离线运行，配置 API key 后即切换真实模型行为。',
+        'body': '浏览器内直接渲染 Notebook，无需配置环境。支持 脚本化 离线运行，配置 API key 后即切换真实模型行为。',
       },
       {
         'target': '.parts',
@@ -344,7 +344,7 @@ function AppContent() {
       {
         'target': '[data-tour="features"]',
         'title': 'What Makes It Different',
-        'body': 'Notebooks render in your browser with zero setup. Mock mode runs offline; add an API key for real models.',
+        'body': 'Notebooks render in your browser with zero setup. 脚本化 mode runs offline; add an API key for real models.',
       },
       {
         'target': '.parts',

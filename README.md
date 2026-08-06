@@ -17,7 +17,7 @@
   <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C">
   <img alt="Notebooks" src="https://img.shields.io/badge/Notebooks-17-orange">
   <img alt="Language" src="https://img.shields.io/badge/Language-Chinese-2ea44f">
-  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20Mock-4b32c3">
+  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20脚本化-4b32c3">
 </p>
 
 <p align="center">
@@ -51,8 +51,8 @@ You will have personally implemented:
 - **A memory system** with hierarchical context and KV-cache reuse
 - **An eval harness** that fits a capability curve to "how long a task takes a human vs an agent"
 
-Every notebook follows one contract — `intuition -> hand calculation -> implementation -> experiment` — and runs
-offline with a deterministic mock LLM. Add an API key and the same cells light up with real models.
+Every notebook follows one contract — `intuition -> hand calculation -> implementation -> experiment` — and uses
+a real OpenAI-compatible LLM endpoint for model-dependent experiments.
 
 ## Curriculum
 
@@ -69,14 +69,14 @@ The 17 lectures form one progressive path: each adds one ability and picks up th
 | 07 | Open-ended Evolution | let an agent improve an agent — and spot reward hacking |
 | 08 | Search & Deep Research | run sample-filter-cluster at AlphaCode scale |
 | 09 | Post-training Evolution | trace one model's whole life from chatbot to agent |
-| 13 | SWE Agents | make an agent fix real code, iteratively |
-| 14 | Agent Memory | give an agent memory that outlives the context window |
-| 17 | Agent Evaluation | measure what an agent can actually finish |
-| 15 | LLM Reasoning | explain why CoT works and when "emergence" is real |
-| 16 | Math Proof | combine a neural proposer with a symbolic verifier |
-| 18 | Autonomy | detect errors, recover, and decide when to hand off to a human |
-| 19 | Robotics (VLA) | turn continuous robot actions into tokens a model can emit |
-| 20 | Future Research | name the open problems and where you could start |
+| 10 | SWE Agents | make an agent fix real code, iteratively |
+| 11 | Agent Memory | give an agent memory that outlives the context window |
+| 12 | LLM Reasoning | explain why CoT works and when "emergence" is real |
+| 13 | Math Proof | combine a neural proposer with a symbolic verifier |
+| 14 | Agent Evaluation | measure what an agent can actually finish |
+| 15 | Autonomy | detect errors, recover, and decide when to hand off to a human |
+| 16 | Robotics (VLA) | turn continuous robot actions into tokens a model can emit |
+| 17 | Future Research | name the open problems and where you could start |
 
 ### How the pieces connect
 
@@ -129,17 +129,7 @@ If `jupyter: command not found` appears, run `source .venv/bin/activate` or call
 Recommended environment: Python 3.10+, PyTorch 2.0+, NumPy, Matplotlib, Jupyter, 16GB RAM. Most
 notebooks run on CPU.
 
-### Mock mode (no API key needed)
-
-Every notebook guarantees that all LLM-dependent cells work with a deterministic mock:
-
-```bash
-export LLM_MOCK=1
-jupyter nbconvert --to notebook --execute \
-  notebooks/part1-foundation/02-test-time-compute.ipynb --output /tmp/out.ipynb
-```
-
-### Real LLM (optional)
+### Real LLM
 
 Point the client at any OpenAI-compatible endpoint to see real model behavior:
 
@@ -149,7 +139,7 @@ export AGENT_LLM_API_KEY="sk-..."
 export AGENT_LLM_MODEL="deepseek-v4-flash"
 ```
 
-Without a key, `get_llm()` in `llm_client.py` returns the mock automatically.
+Without a valid key, `get_llm()` raises an error instead of returning a placeholder answer.
 
 ## Project Status
 
@@ -160,7 +150,7 @@ Without a key, `get_llm()` in `llm_client.py` returns the mock automatically.
 | Papers | 39 downloaded and read; reproducible via `scripts/download_papers.py` |
 | Teaching depth | Every notebook adds "intuition + concrete example + hand calculation + why" |
 | Format | All pass `nbformat.validate`; cell ids normalized |
-| Execution | 17/17 run with zero errors in mock mode; real-API spot checks pass |
+| Execution | Real-API execution verified across the course; model-dependent cells require an API key |
 | Language | Chinese notebooks, bilingual README |
 
 ### Near-Term Roadmap
@@ -252,7 +242,7 @@ The repository follows a small set of standards to keep the notebooks useful as 
 - Core algorithms include at least one concrete hand calculation or toy example.
 - Code cells are kept small and observable.
 - Randomized experiments use fixed seeds.
-- Every notebook is self-contained and runs in mock mode with zero errors.
+- Every notebook is self-contained; model-dependent experiments use the configured real API.
 - Explanations are written for patient beginners, while the code stays close to the real algorithm.
 
 ## Papers and Systems
@@ -298,7 +288,7 @@ self-improving-agent-notebook/
 │   └── part4-frontiers/          # 15, 16, 18, 19, 20
 ├── papers/                       # Study notes per lecture; PDFs reproducible
 ├── scripts/download_papers.py    # Resolve and download all course papers from arXiv
-├── llm_client.py                 # Unified LLM client (OpenAI-compatible + mock)
+├── llm_client.py                 # Unified LLM client (OpenAI-compatible)
 ├── web/                          # React/Vite reader (deployed to GitHub Pages)
 ├── .claude/CLAUDE.md             # Notebook writing guide
 ├── OUTLINE.md                    # Full course outline

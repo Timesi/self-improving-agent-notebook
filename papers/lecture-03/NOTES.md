@@ -72,7 +72,7 @@
   - OOD（匈牙利高考，33 题满分 100）：greedy 46.0、ORM 54.0、**SHEPHERD 63.0**。
   - 规模规律：大验证器校验小生成器显著提升；小验证器校验大生成器反而低于 self-consistency——应让验证器强于生成器。completer 需要"见过"题目分布（剔除相关题的 Weak 训练集表现差）。
 - **与课程主题的关系**：把 PRM 从"人工标注垄断"变成"可自动规模化"，打通"验证 → 强化学习"闭环，是 L6 的 DeepSeekMath/GRPO（step-level reward 训练）最直接的前身。自动标注的质量-成本权衡（N、HE vs SE、completer 强弱）是 notebook 可实操的实验。
-- **可演示的代码点**：从零实现 HE/SE 自动标注（mock completer）；实现 min 归约 + self-consistency 组合选择；手算一个 step-by-step PPO 的 reward 生成；画"验证器选答案 vs majority vote"随 N 变化的曲线。
+- **可演示的代码点**：从零实现 HE/SE 自动标注（脚本化 completer）；实现 min 归约 + self-consistency 组合选择；手算一个 step-by-step PPO 的 reward 生成；画"验证器选答案 vs majority vote"随 N 变化的曲线。
 
 ### 论文 4：Shrinking the Generation-Verification Gap with Weak Verifiers（Weaver，arXiv:2506.18203，shrinking-gen-verif-gap.pdf）
 - **⚠️ 文件问题**：`papers/lecture-03/shrinking-gen-verif-gap.pdf` 里的实际内容不是本文，而是 arXiv:2504.18514 的宇宙学论文 "Inflationary background renormalization"（Kristiano & Yokoyama，与验证无关）。本讲真实论文的 arXiv 编号应为 **2506.18203**（NeurIPS 2025，Stanford + UW-Madison + Together AI，作者 Jon Saad-Falcon 等）。以下笔记基于 2506.18203 的真实内容。写 notebook 时请重新下载正确 PDF。
@@ -118,8 +118,8 @@
 
 1. **迷你数学数据集 + 结果验证器（ORM）**：用 numpy/torch 造一个可控的"答题器"（如规则生成的加减乘除题 + 带随机错误步的解题串），训练一个小验证器（MLP 或线性分类头，输入为解题串特征，标签 = 最终答案是否对）。随后实现 best-of-N：对每题采 N 条候选，比较"随机选 / majority vote（self-consistency）/ 验证器选最高分"三种选择器的正确率。期望输出：验证器选择随 N 增长稳定上升，majority 在某个 N 后平台期；对应 Cobbe 图 7 的直觉。
 2. **手算 PRM 的 step reward**：给定一条两/三步解题过程（手工构造，含一个中间错误步），用规则定义每步正确概率，实现 product 与 min 两种归约，并演示 neutral→positive 映射。手算并可视化每个 step 的分数热力图（哪个 step 拉低了整解分数）。期望输出：错误步分数显著低，product 分数明显低于正确解；对比 Lightman Table 4 的四种评分策略排序。
-3. **模拟 Math-Shepherd 自动标注（HE vs SE）**：用一个 mock/规则的"completer"从中间步续写 N 条路径（用伪随机 + 已知 golden answer 构造可控结果），实现 HE（$\exists$ 中招）与 SE（中招比例）公式，对比两种标签训练出的验证器在排序上的差异；改变 N=1,4,16 观察标注质量。期望输出：HE 在 N 小时与人工标注一致率 86% 的复现性直觉，N 大时 SE 更接近真实分布（对应论文 Figure 4）。
-4. **验证器选答案 vs majority vote 对比曲线**：固定一个生成器（mock），在 GSM8K 式的小样本上画"选择正确率 vs 候选数 N"曲线：self-consistency、ORM（结果验证器）、PRM（步级、min 归约）三条线。期望输出：PRM 线在 N 增大时斜率更大、与多数投票的差距拉大——复现 Lightman Figure 3 与 Math-Shepherd Figure 3。
+3. **模拟 Math-Shepherd 自动标注（HE vs SE）**：用一个 脚本化/规则的"completer"从中间步续写 N 条路径（用伪随机 + 已知 golden answer 构造可控结果），实现 HE（$\exists$ 中招）与 SE（中招比例）公式，对比两种标签训练出的验证器在排序上的差异；改变 N=1,4,16 观察标注质量。期望输出：HE 在 N 小时与人工标注一致率 86% 的复现性直觉，N 大时 SE 更接近真实分布（对应论文 Figure 4）。
+4. **验证器选答案 vs majority vote 对比曲线**：固定一个生成器（脚本化），在 GSM8K 式的小样本上画"选择正确率 vs 候选数 N"曲线：self-consistency、ORM（结果验证器）、PRM（步级、min 归约）三条线。期望输出：PRM 线在 N 增大时斜率更大、与多数投票的差距拉大——复现 Lightman Figure 3 与 Math-Shepherd Figure 3。
 5. **生成-验证差距可视化**：定义并计算 Pass@K（候选池里有正确解的比例，oracle 指标）与 Success Rate（选择器实际挑对的概率），对多个选择器画 gap = Pass@K − SuccessRate 随 K 变化的曲线。期望输出：majority vote 的 gap 随 K 增大先降后升（平台期），从而直观展示"正确解生成了却选不出"是本讲的根源。
 6. **迷你 Weaver：无标签矩估计 + 弱验证器集成**：构造 3–5 个带不同 TPR/TNR 的"模拟弱验证器"（对一批解给 0/1 投票，含噪声），不提供标签，仅用成对同意率做 method-of-moments 估计各验证器精度，再实现朴素贝叶斯后验选解；对比 majority、等权平均、估计带权三种聚合在候选数 K 增长下的正确率。期望输出：估计带权显著优于等权平均与 majority，且能在无标签下逼近 oracle 精度（对应 Weaver Figure 2/3 与 87.7% 故事）。
 

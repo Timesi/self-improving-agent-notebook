@@ -92,7 +92,7 @@
 
 1. **numpy 手算 GRPO 的 advantage 与 loss**：给一个小问题、G=4 个输出及奖励（如 `r = [1, -1, 0, 1]`，对应正确/错误/部分），手算组内 mean、std、归一化 advantage `(r−mean)/std`；再给一个 toy 的重要性比率 `r_ratio = π_θ/π_θold` 列表，实现 `min(ratio·Â, clip(ratio,1−ε,1+ε)·Â)`，打印每个 token 的贡献。期望输出：全对组 advantage 全为 0、梯度为 0（引向 DAPO 的 motivation）。
 2. **GRPO vs PPO 公式对比可视化**：用 numpy 实现两个目标函数，横轴画重要性比率，纵轴画目标值，展示 clip 如何在 `r` 偏离 `[1−ε,1+ε]` 时封住目标；并列出 PPO 需要训价值网络 + GAE、GRPO 只需组内统计的组件对比表。期望输出：clip 导致的目标"平台"曲线，直观看到信任域约束。
-3. **迷你 STaR 循环（控制流 + 数据构造）**：不训大模型，用小 toy 数据集（如 100 道整数加法/选择题）模拟 STaR 的三步：`generate → filter(D_n) → rationalize(D^rat_n)`，用 llm_client（mock 模式确定性输出）或规则假模型给出 (rationale, answer)，按 `ŷ==y` 过滤。重点展示：外层循环数据集如何逐轮膨胀、rationalization 如何补充"生成失败但能反推"的样本、以及"全对就停摆"的平台现象。期望输出：数据集大小的增长曲线 + 正确率提升。
+3. **迷你 STaR 循环（控制流 + 数据构造）**：不训大模型，用小 toy 数据集（如 100 道整数加法/选择题）模拟 STaR 的三步：`generate → filter(D_n) → rationalize(D^rat_n)`，用 llm_client（脚本化 模式确定性输出）或规则假模型给出 (rationale, answer)，按 `ŷ==y` 过滤。重点展示：外层循环数据集如何逐轮膨胀、rationalization 如何补充"生成失败但能反推"的样本、以及"全对就停摆"的平台现象。期望输出：数据集大小的增长曲线 + 正确率提升。
 4. **统一范式：梯度系数一张表**：把 SFT/RFT/Online RFT/GRPO 的梯度系数 `GC(q,o,t,π_rf)` 分别实现成一个函数，打印同一批 (question, output) 下各方法的梯度系数，观察 RFT 只奖不罚、GRPO 按幅度奖惩。期望输出：一个 DataFrame，直观看到"为什么 GRPO 比 Online RFT 高效"。
 5. **熵崩坍与 Clip-Higher 的数值演示**：给定 `π_θold = 0.01`（探索 token）和 `0.9`（利用 token），分别算 ε=0.2 与 ε=0.28 下的可提升上界，画出"低概率 token 被上界压死、高概率 token 本就不受限"的对比图，复现论文 Fig.2b 的熵下降直觉。期望输出：clip 上界曲线，直观理解"抬 ε_high 为什么保住探索"。
 6. **Token-level vs Sample-level loss 的权重对比**：构造一个短样本（|o|=10）和一个长样本（|o|=100），手算两种归一化（`1/G Σ 1/|o_i|` vs `1/Σ|o_i|`）下每个 token 的实际权重，展示长样本中单 token 在样本级 loss 下被稀释。期望输出：每 token 权重的对比数字。

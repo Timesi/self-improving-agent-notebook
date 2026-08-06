@@ -133,27 +133,27 @@ Agent 化逐一突破这四条边界：
 
 ## 代码演示点子（3-6 个）
 
-全部走 `llm_client.get_llm()`（mock 模式确定性输出，无 key 可跑）。Agent 循环核心逻辑从零实现，不依赖现成框架。
+全部走 `llm_client.get_llm()`（脚本化 模式确定性输出，无 key 可跑）。Agent 循环核心逻辑从零实现，不依赖现成框架。
 
-1. **最小 Agent 循环骨架（从零实现）**：写一个 `AgentLoop` 类，属性是消息历史（状态）、工具注册表、LLM。循环体：调用 LLM → 解析输出 → 若是 `Action` 则执行工具并把 observation 追加进历史 → 若是 `Final Answer` 则终止。用一个确定性玩具环境（如加法工具加反转字符串工具）让 mock 模式也能稳定推进。**关键观察**：循环结构本身只有几十行，Agent 与应用的差距在结构而不在模型。
+1. **最小 Agent 循环骨架（从零实现）**：写一个 `AgentLoop` 类，属性是消息历史（状态）、工具注册表、LLM。循环体：调用 LLM → 解析输出 → 若是 `Action` 则执行工具并把 observation 追加进历史 → 若是 `Final Answer` 则终止。用一个确定性玩具环境（如加法工具加反转字符串工具）让 脚本化 模式也能稳定推进。**关键观察**：循环结构本身只有几十行，Agent 与应用的差距在结构而不在模型。
 
-2. **"单次调用 vs 循环"对照**：同一个多步任务，分别用 (a) 纯 LLM 单次调用（mock 下给占位回复）和 (b) Agent 循环（能调用工具拿到环境结果）跑，对比两者的输出与上下文长度。**关键观察**：Agent 多出来的能力来自循环与工具反馈，而不是模型本身；复现"LLM 应用做不到、Agent 能做到"的分水岭。
+2. **"单次调用 vs 循环"对照**：同一个多步任务，分别用 (a) 纯 LLM 单次调用（脚本化 下给占位回复）和 (b) Agent 循环（能调用工具拿到环境结果）跑，对比两者的输出与上下文长度。**关键观察**：Agent 多出来的能力来自循环与工具反馈，而不是模型本身；复现"LLM 应用做不到、Agent 能做到"的分水岭。
 
-3. **用 llm_client 演示 tool-calling 最简版**：实现 `parse_action(text)` 解析 mock/真实 LLM 输出的 ReAct 格式（`Thought: ...` / `Action: name(args)` / `Final Answer: ...`），配一个 `execute(actions, registry)` 执行器，跑 2-3 轮。动作解析要宽容：mock 的脚本化轨迹与真实模型的 JSON 都要能消化。**关键观察**：工具调用本质是纯文本协议，格式约定（今天常用 JSON、MCP）只是把这个协议标准化。
+3. **用 llm_client 演示 tool-calling 最简版**：实现 `parse_action(text)` 解析 脚本化/真实 LLM 输出的 ReAct 格式（`Thought: ...` / `Action: name(args)` / `Final Answer: ...`），配一个 `execute(actions, registry)` 执行器，跑 2-3 轮。动作解析要宽容：脚本化 的脚本化轨迹与真实模型的 JSON 都要能消化。**关键观察**：工具调用本质是纯文本协议，格式约定（今天常用 JSON、MCP）只是把这个协议标准化。
 
 4. **Agent 组件可视化（课程地图图）**：用 matplotlib 画感知—决策—执行—反馈的闭环图（英文标签），把记忆、规划、验证作为"配件"挂到对应环节，并给每个组件标注对应讲次（工具→L4，规划→L5，验证→L3，记忆→L11，训练→L6-L9）。**关键观察**：一图把 17 讲安到 Agent 循环上，学生看到的是整门课的地图。
 
-5. **Agent 范式分类卡片**：用字典定义每个范式（ReAct / Tool use / Planning / Multi-agent / Memory / Framework）的关键词、代表工作、一句适用场景；再给几个真实场景让学生选范式。mock 下就是一个表格加映射练习。**关键观察**：范式不互斥，一个真实 Agent 常同时是 ReAct + Planning + Memory。
+5. **Agent 范式分类卡片**：用字典定义每个范式（ReAct / Tool use / Planning / Multi-agent / Memory / Framework）的关键词、代表工作、一句适用场景；再给几个真实场景让学生选范式。脚本化 下就是一个表格加映射练习。**关键观察**：范式不互斥，一个真实 Agent 常同时是 ReAct + Planning + Memory。
 
-6. **手写一个"多步算术 Agent"（带状态的最小闭环）**：任务等于计算 `(3+5)×(7-2)`。Agent 不能一次算完（mock 的算术工具一次只算一步），必须逐步调用 `calc("3+5")` 得到 8 写回上下文，再调用 `calc("8×5")` 得到 40，最后输出 Final Answer。工具执行器自己写，中间状态由我们回填进消息历史。**关键观察**：中间状态由 Agent 自身维护（上下文回填），这正是 Agent 与一次调用的分水岭，也是后续所有讲的基础。
+6. **手写一个"多步算术 Agent"（带状态的最小闭环）**：任务等于计算 `(3+5)×(7-2)`。Agent 不能一次算完（脚本化 的算术工具一次只算一步），必须逐步调用 `calc("3+5")` 得到 8 写回上下文，再调用 `calc("8×5")` 得到 40，最后输出 Final Answer。工具执行器自己写，中间状态由我们回填进消息历史。**关键观察**：中间状态由 Agent 自身维护（上下文回填），这正是 Agent 与一次调用的分水岭，也是后续所有讲的基础。
 
-> 演示实现建议：以上全部可用确定性工具加 MockLLM 离线完整执行（符合 CLAUDE.md）。演示 4 是纯 matplotlib 图，演示 5 是纯数据/表格，1/2/3/6 需要 mock 兼容的解析器（mock 的 Thought/Action/Final Answer 格式已在 `llm_client.py` 内置）。
+> 演示实现建议：以上全部可用确定性工具加 脚本化LLM 离线完整执行（符合 CLAUDE.md）。演示 4 是纯 matplotlib 图，演示 5 是纯数据/表格，1/2/3/6 需要 脚本化 兼容的解析器（脚本化 的 Thought/Action/Final Answer 格式已在 `llm_client.py` 内置）。
 
 ## 作业点子（3 个）
 
 1. **补全最小循环**：填空完成 `AgentLoop.run(max_steps)` 的终止条件与"动作执行 → observation 回填"两段。给定一个固定任务（如"用工具算 7+8，再反转结果字符串"），`assert` 循环在不超过 max_steps 步内给出 Final Answer，且上下文长度随轮次递增。小提示：终止条件有两个，模型输出 Final Answer，或步数用尽；后者要给出可读的失败信息。
 
-2. **动作解析器**：填空实现 `parse_action(text)`，支持 `Action: name(args)` / `Final Answer: ...` / 无动作三种情况，返回 `(kind, name, args)`。用 mock 模式的脚本化轨迹与一段真实格式文本各测一次，`assert` 边界情况（多余空白、多行、大写 Action）都能正确解析。小提示：先找 `Final Answer` 再做 `Action`，因为 Final 所在行不该被当成 Action。
+2. **动作解析器**：填空实现 `parse_action(text)`，支持 `Action: name(args)` / `Final Answer: ...` / 无动作三种情况，返回 `(kind, name, args)`。用 脚本化 模式的脚本化轨迹与一段真实格式文本各测一次，`assert` 边界情况（多余空白、多行、大写 Action）都能正确解析。小提示：先找 `Final Answer` 再做 `Action`，因为 Final 所在行不该被当成 Action。
 
 3. **单次调用 vs 循环（量化差异）**：对同一任务分别跑单次调用与循环，`assert` 循环的调用次数大于 1 且上下文中包含工具返回值，而单次调用两者皆无；再写一个 `count_tool_calls(trace)` 统计一轮里的工具调用数。小提示：工具返回值靠我们自己回填上下文，所以"循环拿到了工具结果"是可断言的，不依赖具体模型。
 

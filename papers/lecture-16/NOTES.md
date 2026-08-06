@@ -90,7 +90,7 @@
 
 5. **LoRA 低秩微调从零实现**：在 mini VLA 的线性层上加 LoRA（$W = W_0 + BA$，低秩 $A,B$），只训练 $B$ 和 $A$，统计可训练参数占比并对比全参微调在一个新任务上的表现与显存/参数开销。期望输出：参数量对比表，复现 OpenVLA"1.4% 参数追平全参"的数量级。
 
-6. **Plan + Action 链式推理（llm_client）**：解析 RT-2 的 CoT 数据格式 `"Instruction: ... Plan: ... Action: 1 128 ..."`，用 `llm_client`（mock 模式给脚本化轨迹）让模型先生成计划再生成动作 token，演示"语言推理桥接到低层控制"。期望输出：解析出的 Plan 文本与解码后的 7 维动作，并说明动作 token 需经词汇表屏蔽。
+6. **Plan + Action 链式推理（llm_client）**：解析 RT-2 的 CoT 数据格式 `"Instruction: ... Plan: ... Action: 1 128 ..."`，用 `llm_client`（脚本化 模式给脚本化轨迹）让模型先生成计划再生成动作 token，演示"语言推理桥接到低层控制"。期望输出：解析出的 Plan 文本与解码后的 7 维动作，并说明动作 token 需经词汇表屏蔽。
 
 ## 作业点子（3 个）
 
