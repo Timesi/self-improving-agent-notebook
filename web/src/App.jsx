@@ -327,7 +327,7 @@ function AppContent() {
       {
         'target': '.viewer-header',
         'title': '开始你的学习旅程',
-        'body': '从 01 课程总览开始，一步步搭建你的 Agent 知识体系。每篇 Notebook 都是自包含的，可以按任意顺序阅读。',
+        'body': '从 01 什么是 AI Agent 开始，一步步搭建你的 Agent 知识体系。每篇 Notebook 都是自包含的，可以按任意顺序阅读。',
       },
     ],
     en: [

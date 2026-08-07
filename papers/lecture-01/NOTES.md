@@ -1,9 +1,9 @@
-# Lecture 01 — 课程总览：什么是 AI Agent 研读笔记
+# Lecture 01 — 什么是 AI Agent 研读笔记
 
 > 本文件是 CS329A 第 1 讲（Course Overview）的研读笔记，是编写 `notebooks/part1-foundation/01-course-overview.ipynb` 的素材。
 > 来源：https://cs329a.stanford.edu/（Autumn 2025 课程大纲）
 
-> **模板说明**：本讲没有指定论文，是课程总览。按项目要求，模板中的"论文精读"部分改为"概念精读"，逐条拆解本讲要讲清的五个核心概念。
+> **模板说明**：本讲没有指定论文，是总览性的一讲。按项目要求，模板中的"论文精读"部分改为"概念精读"，逐条拆解本讲要讲清的五个核心概念。
 
 ## 课程主题
 

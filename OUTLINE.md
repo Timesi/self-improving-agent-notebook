@@ -9,7 +9,7 @@ Notebook 总数：17
 
 ## Part 1 · Foundation（基础与方法）— L1-L5
 
-### 01-course-overview.ipynb — 课程总览：什么是 AI Agent
+### 01-course-overview.ipynb — 什么是 AI Agent
 
 - 1. 从 LLM 应用到 Agent
 - 2. Agent 的定义与组成

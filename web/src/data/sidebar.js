@@ -6,7 +6,7 @@ export const PATH_STEPS = [
 ]
 
 export const RUNNABLE_NOTEBOOKS = [
-  { id: "nb-1", lessonId: "01-course-overview", title: "课程总览", titleEn: "Course Overview", desc: "什么是 Agent，一条 Agent 循环", descEn: "What is an agent, one agent loop", section: "foundation", duration: 10 },
+  { id: "nb-1", lessonId: "01-course-overview", title: "什么是 AI Agent", titleEn: "Course Overview", desc: "什么是 Agent，一条 Agent 循环", descEn: "What is an agent, one agent loop", section: "foundation", duration: 10 },
   { id: "nb-2", lessonId: "02-test-time-compute", title: "Test-time Compute 缩放", titleEn: "Test-time Compute", desc: "重复采样与 best-of-n", descEn: "Repeated sampling and best-of-n", section: "foundation", duration: 20 },
   { id: "nb-3", lessonId: "03-robust-verification", title: "答案验证", titleEn: "Answer Verification", desc: "结果验证与过程验证", descEn: "Outcome and process verification", section: "foundation", duration: 25 },
   { id: "nb-4", lessonId: "04-tool-code-feedback", title: "ReAct 循环与工具使用", titleEn: "ReAct & Tool Use", desc: "从零实现 ReAct 循环", descEn: "Build a ReAct loop from scratch", section: "foundation", duration: 25 },

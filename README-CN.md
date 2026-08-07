@@ -48,7 +48,7 @@
 
 | # | 讲座 | 这一讲做什么 |
 |:--:|:--|:--|
-| 01 | 课程总览 | 从一个最小循环开始，明确 Agent 和普通 Chatbot 的区别 |
+| 01 | 什么是 AI Agent | 从一个最小循环开始，明确 Agent 和普通 Chatbot 的区别 |
 | 02 | Test-time Compute | 比较重复采样、投票和 best-of-n |
 | 03 | 答案验证 | 实现结果验证和过程验证 |
 | 04 | 工具与代码反馈 | 把搜索、计算器和代码执行接进 ReAct 循环 |
@@ -134,7 +134,7 @@ export AGENT_LLM_MODEL="deepseek-v4-flash"
 Self-Improving Agent Notebook
 │
 ├── Part 1 · 基础与方法（L1-L5）     # 循环、test-time compute、验证、工具、规划
-│   ├── 01 课程总览
+│   ├── 01 什么是 AI Agent
 │   ├── 02 Test-time Compute 缩放
 │   ├── 03 答案验证
 │   ├── 04 工具使用与代码反馈
@@ -167,7 +167,7 @@ Self-Improving Agent Notebook
 
 | # | Notebook | 核心问题 | 实现重点 |
 |:---:|:---|:---|:---|
-| 01 | [课程总览](notebooks/part1-foundation/01-course-overview.ipynb) | 什么是 Agent，为什么它是 Chatbot 的下一步？ | 最小循环骨架、动作解析器 |
+| 01 | [什么是 AI Agent](notebooks/part1-foundation/01-course-overview.ipynb) | 什么是 Agent，为什么它是 Chatbot 的下一步？ | 最小循环骨架、动作解析器 |
 | 02 | [Test-time Compute 缩放](notebooks/part1-foundation/02-test-time-compute.ipynb) | 推理期多花算力为什么有用？ | 重复采样、self-consistency、best-of-n |
 | 03 | [答案验证](notebooks/part1-foundation/03-robust-verification.ipynb) | 如何检查模型生成出的答案？ | ORM vs PRM、验证器训练、步级奖励 |
 | 04 | [工具使用与代码反馈](notebooks/part1-foundation/04-tool-code-feedback.ipynb) | Agent 如何在环境中行动？ | ReAct 循环、工具注册表、执行奖励 |
