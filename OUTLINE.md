@@ -19,7 +19,7 @@ Notebook 总数：17
 - 小结
 - 作业
 
-### 02-test-time-compute.ipynb — Test-time Compute 缩放
+### 02-test-time-compute.ipynb — Test-time Compute：训练之后还能再花的算力
 
 - 1. 训练完成后的算力：test-time compute
 - 2. 重复采样：Large Language Monkeys
