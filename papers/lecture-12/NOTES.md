@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 12 — LLM 推理（LLM Reasoning）研读笔记
 
 > 本文件是 CS329A 第 12 讲的论文研读笔记，是编写对应 notebook 的素材。

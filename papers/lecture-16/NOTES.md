@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 16 — 多模态机器人智能体（Multimodal AI Agents in Robotics）研读笔记
 
 > 本文件是 CS329A 第 16 讲的论文研读笔记，是编写对应 notebook 的素材。

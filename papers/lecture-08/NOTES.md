@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 08 — 搜索与深度研究智能体 研读笔记
 
 > 本文件是 CS329A 第 8 讲的论文研读笔记，是编写对应 notebook 的素材。

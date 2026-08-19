@@ -25,18 +25,22 @@
   notebooks/part1-foundation/04-tool-code-feedback.ipynb --output /tmp/out.ipynb
 ```
 
+英文写作指南见 `.claude/CLAUDE.en.md`；英文 notebook 在 `notebooks-en/`，英文研读笔记为 `papers/lecture-XX/NOTES.en.md`。
+
 ## 目录结构
 
 ```
 self-improving-agent-notebook/
-├── README.md              # 课程总览 + 导航
-├── OUTLINE.md             # 完整课程大纲（复刻 CS329A）
+├── README.md / README-CN.md
+├── OUTLINE.md / OUTLINE.en.md
 ├── CLAUDE.md              # 本文件
-├── .claude/CLAUDE.md      # Agent 写作指南（风格规范，写 notebook 时严格遵守）
+├── .claude/CLAUDE.md      # 中文 notebook 写作指南
+├── .claude/CLAUDE.en.md   # 英文 notebook 写作指南
 ├── llm_client.py          # 统一真实 LLM client（OpenAI 兼容）
 ├── requirements.txt       # 依赖
-├── papers/lecture-XX/     # 每讲论文 PDF + NOTES.md（研读笔记）
-└── notebooks/
+├── papers/lecture-XX/     # NOTES.md（中文）+ NOTES.en.md（英文）+ 论文 PDF
+├── notebooks/             # 中文 17 本
+└── notebooks-en/          # 英文 17 本，目录结构相同
     ├── part1-foundation/    # 01-05：总览、test-time compute、验证、工具、规划
     ├── part2-training/      # 06-09：RL 缩放、开放进化、搜索、后训练演进
     ├── part3-engineering/   # 10/11/14：SWE 智能体、记忆、评测
@@ -51,7 +55,7 @@ self-improving-agent-notebook/
 
 ## 写作规范摘要
 
-完整规则见 `.claude/CLAUDE.md`。核心几条：
+完整规则见 `.claude/CLAUDE.md`（中文 notebook）与 `.claude/CLAUDE.en.md`（英文 notebook）。核心几条：
 - 中文 markdown + 中文注释；专有名词（ReAct、Agent、LLM、Self-Attention）保留英文
 - 平静教科书语气，用"我们"；禁反问句、感叹号、AI 感修辞
 - 每本 notebook 以 `## 小结`（checklist）→ `## 作业`（3 道填空+assert）→ `## 参考资料` 收尾

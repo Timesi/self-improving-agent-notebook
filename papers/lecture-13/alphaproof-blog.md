@@ -1,3 +1,5 @@
+English: [alphaproof-blog.en.md](alphaproof-blog.en.md)
+
 # AlphaProof / AlphaGeometry 2 — DeepMind 博客摘要
 
 来源：https://deepmind.google/discover/blog/ai-solves-imo-problems-at-silver-medal-level/

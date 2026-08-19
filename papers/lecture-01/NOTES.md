@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 01 — 什么是 AI Agent 研读笔记
 
 > 本文件是 CS329A 第 1 讲（Course Overview）的研读笔记，是编写 `notebooks/part1-foundation/01-course-overview.ipynb` 的素材。

@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 06 — 训练期缩放与强化学习 研读笔记
 
 > 本文件是 CS329A 第 6 讲（Train Time Scaling / Scaling RL）的论文研读笔记，是编写对应 notebook 的素材。

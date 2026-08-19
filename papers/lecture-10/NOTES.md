@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 10 — 软件工程智能体（Agentic Frameworks for Software Engineering）研读笔记
 
 > 本文件是 CS329A 第 10 讲的论文研读笔记，是编写对应 notebook 的素材。

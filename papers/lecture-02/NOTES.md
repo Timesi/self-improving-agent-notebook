@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 02 — Test-time Compute 缩放 研读笔记
 
 > 本文件是 CS329A 第 2 讲（Test-time Compute Scaling）的论文研读笔记，是编写 `notebooks/part1-foundation/02-test-time-compute.ipynb` 的素材。

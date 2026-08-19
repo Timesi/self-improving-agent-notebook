@@ -9,15 +9,17 @@
   ·
   <a href="README-CN.md"><strong>中文文档</strong></a>
   ·
-  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/"><strong>Read Online</strong></a>
+  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/"><strong>Read Online (ZH)</strong></a>
+  ·
+  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/?lang=en"><strong>Read Online (EN)</strong></a>
 </p>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB">
   <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C">
   <img alt="Notebooks" src="https://img.shields.io/badge/Notebooks-17-orange">
-  <img alt="Language" src="https://img.shields.io/badge/Language-Chinese-2ea44f">
-  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20脚本化-4b32c3">
+  <img alt="Language" src="https://img.shields.io/badge/Language-Chinese%20%2B%20English-2ea44f">
+  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible-4b32c3">
 </p>
 
 <p align="center">
@@ -121,6 +123,8 @@ python -m ipykernel install --user \
   --display-name "Python (self-improving-agent)"
 
 jupyter notebook notebooks/part1-foundation/01-course-overview.ipynb
+# English notebooks live in notebooks-en/ with the same layout
+# jupyter notebook notebooks-en/part1-foundation/01-course-overview.ipynb
 ```
 
 If `jupyter: command not found` appears, run `source .venv/bin/activate` or call
@@ -146,19 +150,18 @@ Without a valid key, `get_llm()` raises an error instead of returning a placehol
 | Area | Status |
 |:---|:---|
 | Notebooks | Complete 17/17 across 4 parts |
-| Study notes | 17/17 lectures, one `papers/lecture-XX/NOTES.md` each |
+| Study notes | 17/17 lectures, `NOTES.md` (ZH) and `NOTES.en.md` (EN) each |
 | Papers | 39 downloaded and read; reproducible via `scripts/download_papers.py` |
 | Teaching depth | Every notebook adds "intuition + concrete example + hand calculation + why" |
 | Format | All pass `nbformat.validate`; cell ids normalized |
 | Execution | Real-API execution verified across the course; model-dependent cells require an API key |
-| Language | Chinese notebooks, bilingual README |
+| Language | Chinese notebooks in `notebooks/`, English notebooks in `notebooks-en/` |
 
 ### Near-Term Roadmap
 
 1. Polish the writing so explanations flow naturally from intuition to code.
 2. Widen real-API verification across all notebooks.
 3. Add deeper material on reliability and scalable oversight.
-4. Consider an English mirror of the notebooks.
 
 ## Curriculum Map
 
@@ -195,6 +198,8 @@ Every notebook is self-contained. Lectures 10-12 in the source course were midte
 have no notebooks.
 
 ## Notebook Index
+
+Chinese notebooks are linked below. The English port uses the same filenames under [`notebooks-en/`](notebooks-en/). The online reader opens English with [`?lang=en`](https://walkinglabs.github.io/self-improving-agent-notebook/?lang=en).
 
 ### Part 1 · Foundation
 
@@ -268,8 +273,8 @@ The repository follows a small set of standards to keep the notebooks useful as 
 The curriculum mirrors the syllabus of Stanford's [CS329A: AI Agents](https://cs329a.stanford.edu/)
 (Autumn 2025). The course page lists each lecture's papers without lecture details. This repository
 downloads and reads those papers, writes a study note for every lecture
-(`papers/lecture-XX/NOTES.md`), then turns each lecture into a runnable notebook that reconstructs how
-the lecturer would teach it.
+(`papers/lecture-XX/NOTES.md` and `NOTES.en.md`), then turns each lecture into a runnable notebook that reconstructs how
+the lecturer would teach it. Chinese notebooks live in `notebooks/`; the English port lives in `notebooks-en/`. The online reader switches with `?lang=en`.
 
 Guest lectures without assigned papers (post-training evolution, LLM reasoning, AlphaProof, autonomy,
 robotics) are reconstructed from the speaker's research direction and related papers. See
@@ -282,16 +287,18 @@ collection. The teaching contract and repository style are inspired by
 ```text
 self-improving-agent-notebook/
 ├── notebooks/                    # Chinese notebooks (17)
+├── notebooks-en/                 # English notebooks (17), same layout
 │   ├── part1-foundation/         # 01-05
 │   ├── part2-training/           # 06-09
-│   ├── part3-engineering/        # 13, 14, 17
-│   └── part4-frontiers/          # 15, 16, 18, 19, 20
-├── papers/                       # Study notes per lecture; PDFs reproducible
+│   ├── part3-engineering/        # 10, 11, 14
+│   └── part4-frontiers/          # 12, 13, 15, 16, 17
+├── papers/                       # NOTES.md (ZH) + NOTES.en.md (EN); PDFs reproducible
 ├── scripts/download_papers.py    # Resolve and download all course papers from arXiv
 ├── llm_client.py                 # Unified LLM client (OpenAI-compatible)
 ├── web/                          # React/Vite reader (deployed to GitHub Pages)
-├── .claude/CLAUDE.md             # Notebook writing guide
-├── OUTLINE.md                    # Full course outline
+├── .claude/CLAUDE.md             # Chinese notebook writing guide
+├── .claude/CLAUDE.en.md          # English notebook writing guide
+├── OUTLINE.md / OUTLINE.en.md    # Course outline
 └── README.md / README-CN.md
 ```
 
