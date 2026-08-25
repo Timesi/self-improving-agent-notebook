@@ -132,8 +132,8 @@ function inlineMarkdown(text) {
 
   let html = escapeHtml(protectedText)
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+  html = html.replace(/\*\*(?!\s)([^*]*?\S)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/(^|[^\\*])\*(?!\s)([^*]*?\S)\*(?!\*)/g, '$1<em>$2</em>')
   html = html.replace(
     /!\[([^\]]*)\]\(([^)]+)\)/g,
     '<img src="$2" alt="$1" loading="lazy" />'
