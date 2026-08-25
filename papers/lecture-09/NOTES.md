@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 09 — 后训练演进：从 Chatbot 到 Agent 研读笔记
 
 > 本文件是 CS329A 第 9 讲（嘉宾 Melvin Johnson，Google DeepMind）"Evolution of Post-training from Chatbots to Agents" 的研读笔记，是编写对应 notebook 的素材。

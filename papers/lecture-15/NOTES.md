@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 15 — 构建自治智能体系统：经验与开放问题 研读笔记
 
 > 本文件是 CS329A 第 15 讲的研读笔记，是编写对应 notebook 的素材。

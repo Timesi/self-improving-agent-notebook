@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 04 — 工具使用与代码反馈 研读笔记
 
 > 本文件是 CS329A 第 4 讲的论文研读笔记，是编写对应 notebook 的素材。

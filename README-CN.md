@@ -9,15 +9,17 @@
   ·
   <a href="README-CN.md"><strong>中文文档</strong></a>
   ·
-  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/"><strong>在线阅读</strong></a>
+  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/"><strong>在线阅读（中文）</strong></a>
+  ·
+  <a href="https://walkinglabs.github.io/self-improving-agent-notebook/?lang=en"><strong>Read Online (EN)</strong></a>
 </p>
 
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB">
   <img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-2.0%2B-EE4C2C">
   <img alt="Notebooks" src="https://img.shields.io/badge/Notebooks-17-orange">
-  <img alt="Language" src="https://img.shields.io/badge/Language-Chinese-2ea44f">
-  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible%20%2B%20脚本化-4b32c3">
+  <img alt="Language" src="https://img.shields.io/badge/Language-Chinese%20%2B%20English-2ea44f">
+  <img alt="LLM" src="https://img.shields.io/badge/LLM-OpenAI%20Compatible-4b32c3">
 </p>
 
 <p align="center">
@@ -89,6 +91,8 @@ python -m ipykernel install --user \
   --display-name "Python (self-improving-agent)"
 
 jupyter notebook notebooks/part1-foundation/01-course-overview.ipynb
+# 英文 notebook 在 notebooks-en/，目录结构相同
+# jupyter notebook notebooks-en/part1-foundation/01-course-overview.ipynb
 ```
 
 如果提示 `jupyter: command not found`，说明虚拟环境没有激活，运行 `source .venv/bin/activate`，
@@ -114,19 +118,18 @@ export AGENT_LLM_MODEL="deepseek-v4-flash"
 | 领域 | 状态 |
 |:---|:---|
 | Notebook | 完成 17/17，分布在 4 个 Part |
-| 研读笔记 | 17/17 讲，每讲一份 `papers/lecture-XX/NOTES.md` |
+| 研读笔记 | 17/17 讲，每讲 `NOTES.md`（中文）与 `NOTES.en.md`（英文） |
 | 论文 | 下载并精读 39 篇；`scripts/download_papers.py` 可复现下载 |
 | 讲解深度 | 每本补齐"直觉 + 具体例子 + 手算 + 为什么"，面向大一读者 |
 | 格式 | 全部通过 `nbformat.validate`，cell id 规范化 |
 | 执行 | 真实 API 抽查通过；完整执行需配置 API key |
-| 语言 | 中文 notebook，中英双语 README |
+| 语言 | 中文 notebook 在 `notebooks/`，英文 notebook 在 `notebooks-en/` |
 
 ### 近期路线图
 
 1. 打磨行文，让讲解从直觉到代码更自然。
 2. 扩大真实 API 验证范围。
 3. 增加 Agent 可靠性与可扩展监督的深度内容。
-4. 考虑补一份英文 notebook 镜像。
 
 ## 课程地图
 
@@ -162,6 +165,8 @@ Self-Improving Agent Notebook
 每本 notebook 自包含，可独立运行。原始课程中的 L10-12 是中期展示，没有 notebook。
 
 ## Notebook 索引
+
+中文 notebook 如下。英文译本在 [`notebooks-en/`](notebooks-en/)，文件名相同。在线阅读英文版加 [`?lang=en`](https://walkinglabs.github.io/self-improving-agent-notebook/?lang=en)。
 
 ### Part 1 · 基础与方法
 
@@ -248,16 +253,18 @@ Self-Improving Agent Notebook
 ```text
 self-improving-agent-notebook/
 ├── notebooks/                    # 中文 notebook（17 本）
+├── notebooks-en/                 # 英文 notebook（17 本），目录结构相同
 │   ├── part1-foundation/         # 01-05
 │   ├── part2-training/           # 06-09
 │   ├── part3-engineering/        # 10, 11, 14
 │   └── part4-frontiers/          # 12, 13, 15, 16, 17
-├── papers/                       # 每讲研读笔记（NOTES.md）；论文 PDF 可复现
+├── papers/                       # NOTES.md（中文）+ NOTES.en.md（英文）；论文 PDF 可复现
 ├── scripts/download_papers.py    # 从 arXiv 解析并下载全部课程论文
 ├── llm_client.py                 # 统一 LLM 客户端（OpenAI 兼容）
 ├── web/                          # React/Vite 在线阅读器（部署到 GitHub Pages）
-├── .claude/CLAUDE.md             # Notebook 写作规范
-├── OUTLINE.md                    # 完整课程大纲
+├── .claude/CLAUDE.md             # 中文 notebook 写作规范
+├── .claude/CLAUDE.en.md          # 英文 notebook 写作规范
+├── OUTLINE.md / OUTLINE.en.md    # 课程大纲
 └── README.md / README-CN.md
 ```
 

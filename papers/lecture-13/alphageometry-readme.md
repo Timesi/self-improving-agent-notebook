@@ -1,3 +1,5 @@
+English: [alphageometry-readme.en.md](alphageometry-readme.en.md)
+
 # AlphaGeometry — GitHub README 要点
 
 来源：https://github.com/google-deepmind/alphageometry

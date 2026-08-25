@@ -1,3 +1,5 @@
+English notebooks: follow [CLAUDE.en.md](CLAUDE.en.md) and write under `notebooks-en/`.
+
 # Agent Writing Guide — Self-Improving Agent Notebook
 
 你在为 **Self-Improving Agent Notebook** 项目写作 Jupyter Notebook 教程。

@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 11 — Augmenting Agents with Memory（给 Agent 加记忆）研读笔记
 
 > 本文件是 CS329A 第 11 讲的论文研读笔记，是编写对应 notebook 的素材。

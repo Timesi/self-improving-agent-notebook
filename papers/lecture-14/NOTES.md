@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 14 — Agent 评测与长程任务 研读笔记
 
 > 本文件是 CS329A 第 14 讲的论文研读笔记，是编写对应 notebook 的素材。

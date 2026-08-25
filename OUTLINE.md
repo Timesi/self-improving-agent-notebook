@@ -1,3 +1,5 @@
+English: [OUTLINE.en.md](OUTLINE.en.md)
+
 # Self-Improving Agent Notebook 课程大纲
 
 复刻 Stanford CS329A（AI Agents，Autumn 2025）。按课程讲座号组织，跳过中期展示（L10-L12）。

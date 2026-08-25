@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 13 — 迈向超级人类推理：AlphaProof、AlphaGeometry 与 Gemini 的 IMO 金牌 研读笔记
 
 > 本文件是 CS329A 第 13 讲的论文研读笔记，是编写对应 notebook 的素材。

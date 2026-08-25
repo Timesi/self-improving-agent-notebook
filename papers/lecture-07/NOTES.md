@@ -1,3 +1,5 @@
+English: [NOTES.en.md](NOTES.en.md)
+
 # Lecture 07 — 自改进智能体的开放进化 研读笔记
 
 > 本文件是 CS329A 第 7 讲的论文研读笔记，是编写对应 notebook 的素材。

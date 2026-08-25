@@ -238,9 +238,35 @@ export default function Sidebar({
           </div>
         </div>
 
-                {/* Language（中文 only） */}
-        <div className="bg-[var(--bg-input)] px-3 py-1.5 rounded-full flex items-center w-fit border border-[var(--border-light)] select-none text-xs font-bold text-[var(--text-secondary)]">
-          中文
+        <div
+          className="bg-[var(--bg-input)] p-0.5 rounded-full flex items-center w-fit border border-[var(--border-light)] select-none text-xs font-bold"
+          role="group"
+          aria-label={lang === 'zh' ? '语言' : 'Language'}
+        >
+          <button
+            type="button"
+            onClick={() => onLanguageChange?.('zh')}
+            className={`px-3 py-1 rounded-full transition-colors ${
+              lang === 'zh'
+                ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+            aria-pressed={lang === 'zh'}
+          >
+            中文
+          </button>
+          <button
+            type="button"
+            onClick={() => onLanguageChange?.('en')}
+            className={`px-3 py-1 rounded-full transition-colors ${
+              lang === 'en'
+                ? 'bg-white text-[var(--text-primary)] shadow-sm'
+                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+            }`}
+            aria-pressed={lang === 'en'}
+          >
+            EN
+          </button>
         </div>
       </div>
 

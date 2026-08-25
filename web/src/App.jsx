@@ -344,7 +344,7 @@ function AppContent() {
       {
         'target': '[data-tour="features"]',
         'title': 'What Makes It Different',
-        'body': 'Notebooks render in your browser with zero setup. 脚本化 mode runs offline; add an API key for real models.',
+        'body': 'Notebooks render in your browser with zero setup. Scripted mode runs offline; add an API key for real models.',
       },
       {
         'target': '.parts',
